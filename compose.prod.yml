@@ -1,0 +1,10 @@
+services:
+  ops-site:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ops-site:latest
+    container_name: ops-site
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"

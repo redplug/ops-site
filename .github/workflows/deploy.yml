@@ -1,0 +1,81 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ops-site-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate static assets
+        run: |
+          test -f index.html
+          test -f styles.css
+          test -f app.js
+          node --check app.js
+
+      - name: Pack release
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.agents' \
+            --exclude='.gstack-codex-txn' \
+            --exclude='node_modules' \
+            -czf ops-site-release.tgz \
+            index.html styles.css app.js Dockerfile nginx.conf compose.prod.yml
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          PORT="${SSH_PORT:-22}"
+          ssh-keyscan -p "$PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload release
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          PORT="${SSH_PORT:-22}"
+          TARGET_PATH="${DEPLOY_PATH:-/opt/ops-site}"
+          ssh -i ~/.ssh/deploy_key -p "$PORT" "$SSH_USER@$SSH_HOST" "mkdir -p '$TARGET_PATH'"
+          scp -i ~/.ssh/deploy_key -P "$PORT" ops-site-release.tgz "$SSH_USER@$SSH_HOST:$TARGET_PATH/ops-site-release.tgz"
+
+      - name: Restart service
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          APP_PORT: ${{ vars.APP_PORT }}
+        run: |
+          PORT="${SSH_PORT:-22}"
+          TARGET_PATH="${DEPLOY_PATH:-/opt/ops-site}"
+          REMOTE_APP_PORT="${APP_PORT:-8080}"
+          ssh -i ~/.ssh/deploy_key -p "$PORT" "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd '$TARGET_PATH'
+            tar -xzf ops-site-release.tgz
+            APP_PORT='$REMOTE_APP_PORT' docker compose -f compose.prod.yml up -d --build --remove-orphans
+            docker image prune -f
+          "

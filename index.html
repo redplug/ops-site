@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ops Portfolio Hub | IT Operations Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <div class="mobile-overlay" id="mobileOverlay" aria-hidden="true"></div>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><i data-lucide="terminal"></i></div>
+        <div>
+          <div class="brand-row">
+            <h1>Ops Hub</h1>
+            <button class="version-pill" id="versionButton" type="button">v1.0</button>
+          </div>
+          <p>IT Operations Portfolio</p>
+        </div>
+      </div>
+
+      <nav class="nav custom-scrollbar" aria-label="Main navigation">
+        <p class="nav-section">Dash</p>
+        <button class="nav-item active" type="button" data-route="home">
+          <i data-lucide="layout-dashboard"></i><span>운영 현황</span>
+        </button>
+
+        <div class="nav-section-row">
+          <p class="nav-section accent">Official Support</p>
+          <span class="pulse-dot"></span>
+        </div>
+
+        <button class="nav-item" type="button" id="policyToggle">
+          <i data-lucide="shield-check"></i><span>IT Policy Navigator</span>
+          <i data-lucide="chevron-down" class="chevron"></i>
+        </button>
+        <div class="subnav open" id="policyMenu"></div>
+
+        <button class="nav-item" type="button" data-route="assets">
+          <i data-lucide="package"></i><span>IT Asset Management</span>
+        </button>
+        <button class="nav-item" type="button" data-route="signature">
+          <i data-lucide="pen-tool"></i><span>Signature Creator</span>
+        </button>
+        <button class="nav-item" type="button" data-route="directory">
+          <i data-lucide="library"></i><span>System Directory</span>
+        </button>
+        <button class="nav-item" type="button" data-route="meeting">
+          <i data-lucide="calendar"></i><span>Meeting Room</span>
+        </button>
+        <button class="nav-item" type="button" data-route="cable">
+          <i data-lucide="scan-search"></i><span>Cable Seat Locator</span>
+        </button>
+        <button class="nav-item" type="button" data-route="onboarding">
+          <i data-lucide="user-plus"></i><span>IT Onboarding Guide</span>
+        </button>
+
+        <p class="nav-section muted-section">Unofficial Tools</p>
+        <button class="nav-item" type="button" data-route="netcheck">
+          <i data-lucide="wifi"></i><span>Net Check</span>
+        </button>
+        <button class="nav-item" type="button" data-route="imagestudio">
+          <i data-lucide="image-plus"></i><span>Image Studio</span>
+        </button>
+        <button class="nav-item" type="button" data-route="pdf">
+          <i data-lucide="file-lock-2"></i><span>Secure PDF</span>
+        </button>
+        <button class="nav-item" type="button" data-route="diff">
+          <i data-lucide="git-compare"></i><span>Diff Expert</span>
+        </button>
+        <button class="nav-item" type="button" data-route="rename">
+          <i data-lucide="files"></i><span>File Renamer</span>
+        </button>
+        <button class="nav-item" type="button" data-route="textcleaner">
+          <i data-lucide="sparkles"></i><span>Text Cleaner</span>
+        </button>
+        <button class="nav-item" type="button" data-route="todo">
+          <i data-lucide="list-checks"></i><span>Todo List</span>
+        </button>
+        <button class="nav-item" type="button" data-route="work">
+          <i data-lucide="calendar-range"></i><span>Work Manager</span>
+        </button>
+        <button class="nav-item" type="button" data-route="tax">
+          <i data-lucide="coins"></i><span>Year-end Tax</span>
+        </button>
+        <button class="nav-item" type="button" data-route="lunch">
+          <i data-lucide="map-pin"></i><span>Lunch Guide</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="footer-icon"><i data-lucide="server-cog"></i></div>
+        <div>
+          <strong>Portfolio Clone</strong>
+          <span>Static tool platform</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-button" id="sidebarButton" type="button" aria-label="Toggle sidebar">
+            <i data-lucide="menu"></i>
+          </button>
+          <h2 id="viewTitle">OPERATIONS OVERVIEW</h2>
+        </div>
+        <div class="topbar-actions">
+          <div class="sync-badge"><i data-lucide="check-circle"></i><span>Local Demo Active</span></div>
+          <button class="icon-button" id="refreshButton" type="button" aria-label="Refresh view">
+            <i data-lucide="rotate-cw"></i>
+          </button>
+        </div>
+      </header>
+
+      <section class="content custom-scrollbar" id="content"></section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
