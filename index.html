@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260521-settings-release">
 </head>
 <body>
   <div class="app-shell">
@@ -18,12 +18,17 @@
     <aside class="sidebar" id="sidebar">
       <div class="brand">
         <div class="brand-mark"><i data-lucide="terminal"></i></div>
-        <div>
+        <div class="brand-copy">
           <div class="brand-row">
             <h1>Ops Hub</h1>
             <button class="version-pill" id="versionButton" type="button">v1.0</button>
           </div>
           <p>IT Operations Portfolio</p>
+        </div>
+        <div class="sidebar-controls">
+          <button class="icon-button sidebar-icon-button" id="sidebarButton" type="button" aria-label="Toggle sidebar menu">
+            <i data-lucide="panel-left-close"></i>
+          </button>
         </div>
       </div>
 
@@ -34,30 +39,23 @@
         </button>
 
         <div id="toolMenu"></div>
-
-        <p class="nav-section muted-section">System</p>
-        <button class="nav-item" type="button" id="settingsToggle">
-          <i data-lucide="settings"></i><span>Settings</span>
-          <i data-lucide="chevron-down" class="chevron"></i>
-        </button>
-        <div class="subnav open" id="settingsMenu"></div>
       </nav>
 
       <div class="sidebar-footer">
         <div class="footer-icon"><i data-lucide="server-cog"></i></div>
         <div>
-          <strong>Portfolio Clone</strong>
+          <strong>Ops Portfolio</strong>
           <span>Static tool platform</span>
         </div>
+        <button class="icon-button footer-settings-button" id="settingsToggle" type="button" data-route="settings" aria-label="Open settings">
+          <i data-lucide="settings"></i>
+        </button>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
         <div class="topbar-left">
-          <button class="icon-button" id="sidebarButton" type="button" aria-label="Toggle sidebar">
-            <i data-lucide="menu"></i>
-          </button>
           <h2 id="viewTitle">OPERATIONS OVERVIEW</h2>
         </div>
         <div class="topbar-actions">
@@ -72,6 +70,6 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260516-1215"></script>
+  <script src="app.js?v=20260521-settings-release"></script>
 </body>
 </html>
