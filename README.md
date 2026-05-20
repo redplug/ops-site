@@ -4,6 +4,8 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 정적 웹
 
 현재 사이트는 포트폴리오용으로 동작 가능한 도구를 우선 배치하고, 설정 화면에서 메뉴와 대시보드 값을 관리할 수 있는 구조입니다.
 
+데모 사이트: https://ops-site.flgram.com/
+
 ## 주요 기능
 
 - 좌측 사이드바 기반 포털 네비게이션과 접기/펼치기
@@ -191,7 +193,7 @@ ops-site
 접속 형태:
 
 ```text
-http://SERVER_IP:8080/
+https://ops-site.flgram.com/
 ```
 
 ## GitHub Actions Configuration
