@@ -92,7 +92,7 @@ const systemDirectoryDefaults = {
     tenantName: "테스트 Entra ID",
     tenantId: "organizations",
     clientId: "",
-    scopes: "User.Read Directory.Read.All",
+    scopes: "User.Read Directory.Read.All Application.Read.All Device.Read.All",
     primaryDomain: "contoso.onmicrosoft.com",
     adminAccount: "admin@contoso.onmicrosoft.com",
     owner: "IT Operations",
@@ -114,7 +114,7 @@ const systemDirectoryDefaults = {
 };
 
 const systemDirectoryRuntimeDefaults = {
-  entra: { connectionStatus: "not_configured", accountCount: 0, groupCount: 0, syncedAt: "", accountName: "", accountUsername: "", error: "" },
+  entra: { connectionStatus: "not_configured", accountCount: 0, groupCount: 0, applicationCount: 0, deviceCount: 0, syncedAt: "", accountName: "", accountUsername: "", error: "" },
   google: { connectionStatus: "not_configured", accountCount: 0, groupCount: 0, syncedAt: "" },
   slack: { connectionStatus: "not_configured", accountCount: 0, groupCount: 0, syncedAt: "" },
 };
@@ -910,8 +910,13 @@ function normalizeUrl(value, fallback = "") {
 function getSystemDirectoryConfig() {
   try {
     const saved = JSON.parse(localStorage.getItem(systemDirectoryConfigKey) || "{}");
+    const entra = { ...systemDirectoryDefaults.entra, ...(saved.entra || {}) };
+    const previousDefaultScopes = "User.Read Directory.Read.All";
+    if (!String(entra.scopes || "").trim() || String(entra.scopes).trim() === previousDefaultScopes) {
+      entra.scopes = systemDirectoryDefaults.entra.scopes;
+    }
     return {
-      entra: { ...systemDirectoryDefaults.entra, ...(saved.entra || {}) },
+      entra,
       google: { ...systemDirectoryDefaults.google, ...(saved.google || {}) },
       slack: { ...systemDirectoryDefaults.slack, ...(saved.slack || {}) },
     };
@@ -1069,16 +1074,20 @@ async function syncEntraDirectory({ interactive = false, msalApp = null, account
   }
 
   const accessToken = tokenResponse.accessToken;
-  const [profile, accountCount, groupCount] = await Promise.all([
+  const [profile, accountCount, groupCount, applicationCount, deviceCount] = await Promise.all([
     fetchGraphJson(accessToken, "me?$select=displayName,userPrincipalName"),
     fetchGraphCount(accessToken, "users"),
     fetchGraphCount(accessToken, "groups"),
+    fetchGraphCount(accessToken, "applications"),
+    fetchGraphCount(accessToken, "devices"),
   ]);
 
   return updateEntraRuntime({
     connectionStatus: "connected",
     accountCount,
     groupCount,
+    applicationCount,
+    deviceCount,
     syncedAt: new Date().toISOString(),
     accountName: profile.displayName || activeAccount.name || "",
     accountUsername: profile.userPrincipalName || activeAccount.username || "",
@@ -1187,6 +1196,15 @@ function buildSystemEntries(config) {
       status: runtime.entra.connectionStatus,
       accountCount: runtime.entra.accountCount,
       groupCount: runtime.entra.groupCount,
+      applicationCount: runtime.entra.applicationCount,
+      deviceCount: runtime.entra.deviceCount,
+      metrics: [
+        ["연동 상태", integrationStatusMeta(runtime.entra.connectionStatus, runtime.entra.connectionStatus !== "not_configured", runtime.entra.accountCount).detail],
+        ["계정", displayCount(runtime.entra.accountCount, runtime.entra.connectionStatus !== "not_configured")],
+        ["그룹", displayCount(runtime.entra.groupCount, runtime.entra.connectionStatus !== "not_configured")],
+        ["애플리케이션", displayCount(runtime.entra.applicationCount, runtime.entra.connectionStatus !== "not_configured")],
+        ["디바이스", displayCount(runtime.entra.deviceCount, runtime.entra.connectionStatus !== "not_configured")],
+      ],
       details: [
         ["Tenant", config.entra.tenantName],
         ["Last sync", formatSyncTime(runtime.entra.syncedAt)],
@@ -1206,6 +1224,7 @@ function buildSystemEntries(config) {
       status: runtime.google.connectionStatus,
       accountCount: runtime.google.accountCount,
       groupCount: runtime.google.groupCount,
+      metrics: null,
       details: [
         ["Domain", googleDomain],
       ],
@@ -1224,6 +1243,7 @@ function buildSystemEntries(config) {
       status: runtime.slack.connectionStatus,
       accountCount: runtime.slack.accountCount,
       groupCount: runtime.slack.groupCount,
+      metrics: null,
       details: [
         ["Workspace", config.slack.workspaceName],
         ["Workspace URL", workspaceUrl],
@@ -1239,6 +1259,11 @@ function buildSystemEntries(config) {
 
 function systemEntryCard(entry) {
   const status = integrationStatusMeta(entry.status, entry.enabled, entry.accountCount);
+  const metrics = entry.metrics || [
+    ["연동 상태", status.detail],
+    ["계정", displayCount(entry.accountCount, entry.enabled)],
+    ["그룹", displayCount(entry.groupCount, entry.enabled)],
+  ];
   return `
     <article class="directory-card ${entry.enabled ? "enabled" : "disabled"} ${status.className}">
       <div class="directory-card-head">
@@ -1252,18 +1277,12 @@ function systemEntryCard(entry) {
         <span class="directory-status ${status.className}">${escapeHtml(status.label)}</span>
       </div>
       <div class="directory-health">
-        <div>
-          <strong>${escapeHtml(status.detail)}</strong>
-          <span>연동 상태</span>
-        </div>
-        <div>
-          <strong>${escapeHtml(displayCount(entry.accountCount, entry.enabled))}</strong>
-          <span>계정</span>
-        </div>
-        <div>
-          <strong>${escapeHtml(displayCount(entry.groupCount, entry.enabled))}</strong>
-          <span>그룹</span>
-        </div>
+        ${metrics.map(([label, value]) => `
+          <div>
+            <strong>${escapeHtml(value)}</strong>
+            <span>${escapeHtml(label)}</span>
+          </div>
+        `).join("")}
       </div>
       <div class="directory-meta-strip">
         ${entry.details.map(([label, value]) => `
@@ -1414,6 +1433,8 @@ function renderSystemDirectory() {
   const configuredCount = entries.filter((entry) => entry.enabled).length;
   const totalAccounts = entries.reduce((sum, entry) => sum + (entry.enabled ? Number.parseInt(entry.accountCount, 10) || 0 : 0), 0);
   const totalGroups = entries.reduce((sum, entry) => sum + (entry.enabled ? Number.parseInt(entry.groupCount, 10) || 0 : 0), 0);
+  const totalApplications = entries.reduce((sum, entry) => sum + (entry.enabled ? Number.parseInt(entry.applicationCount, 10) || 0 : 0), 0);
+  const totalDevices = entries.reduce((sum, entry) => sum + (entry.enabled ? Number.parseInt(entry.deviceCount, 10) || 0 : 0), 0);
   content.innerHTML = `
     <section class="tool-panel view">
       <div class="tool-panel-header">
@@ -1439,6 +1460,16 @@ function renderSystemDirectory() {
             ${icon("users-round")}
             <strong>${totalGroups ? totalGroups.toLocaleString("ko-KR") : "없음"}</strong>
             <span>전체 그룹 · 설정 ${configuredCount}개</span>
+          </article>
+          <article>
+            ${icon("app-window")}
+            <strong>${totalApplications ? totalApplications.toLocaleString("ko-KR") : "없음"}</strong>
+            <span>등록 애플리케이션</span>
+          </article>
+          <article>
+            ${icon("monitor-smartphone")}
+            <strong>${totalDevices ? totalDevices.toLocaleString("ko-KR") : "없음"}</strong>
+            <span>등록 디바이스</span>
           </article>
         </section>
         <section class="directory-grid">

@@ -99,9 +99,9 @@ Entra ID 연동은 정적 SPA 구조에 맞춰 MSAL Browser의 Authorization Cod
 
 - Application client ID
 - Tenant ID 또는 `organizations`
-- Graph scopes: 기본값은 `User.Read Directory.Read.All`
+- Graph scopes: 기본값은 `User.Read Directory.Read.All Application.Read.All Device.Read.All`
 
-`Directory.Read.All`은 사용자/그룹 수 조회에 필요하며 tenant 관리자 동의가 필요할 수 있습니다. 토큰 캐시는 브라우저 `sessionStorage`에 보관하고, 동기화 결과만 LocalStorage 런타임 상태에 저장합니다.
+`Directory.Read.All`, `Application.Read.All`, `Device.Read.All`은 사용자/그룹/애플리케이션/디바이스 수 조회에 필요하며 tenant 관리자 동의가 필요할 수 있습니다. 토큰 캐시는 브라우저 `sessionStorage`에 보관하고, 동기화 결과만 LocalStorage 런타임 상태에 저장합니다.
 
 ## Local Development
 
