@@ -51,6 +51,7 @@ const menuVisibilityKey = "opsHubMenuVisibility";
 const dashboardConfigKey = "opsHubDashboardConfig";
 const systemDirectoryConfigKey = "opsHubSystemDirectoryConfig";
 const systemDirectoryRuntimeKey = "opsHubSystemDirectoryRuntime";
+const entraReturnRouteKey = "opsHubEntraReturnRoute";
 const sidebarCollapsedKey = "opsHubSidebarCollapsed";
 const settingsPasswordKey = "opsHubSettingsPassword";
 let settingsUnlocked = false;
@@ -60,6 +61,7 @@ const settingsSections = [
   { key: "settings-integrations", name: "Integration Settings", desc: "Slack, Google Workspace, Microsoft Entra ID 연동 설정을 관리합니다.", icon: "plug" },
   { key: "settings-security", name: "Security Settings", desc: "Settings 진입 비밀번호를 변경합니다.", icon: "lock-keyhole" },
 ];
+let currentRoute = "home";
 
 const defaultDashboardConfig = {
   channelLabel: "IT Comm.",
@@ -89,6 +91,8 @@ const systemDirectoryDefaults = {
   entra: {
     tenantName: "테스트 Entra ID",
     tenantId: "organizations",
+    clientId: "",
+    scopes: "User.Read Directory.Read.All",
     primaryDomain: "contoso.onmicrosoft.com",
     adminAccount: "admin@contoso.onmicrosoft.com",
     owner: "IT Operations",
@@ -110,7 +114,7 @@ const systemDirectoryDefaults = {
 };
 
 const systemDirectoryRuntimeDefaults = {
-  entra: { connectionStatus: "not_configured", accountCount: 0, groupCount: 0, syncedAt: "" },
+  entra: { connectionStatus: "not_configured", accountCount: 0, groupCount: 0, syncedAt: "", accountName: "", accountUsername: "", error: "" },
   google: { connectionStatus: "not_configured", accountCount: 0, groupCount: 0, syncedAt: "" },
   slack: { connectionStatus: "not_configured", accountCount: 0, groupCount: 0, syncedAt: "" },
 };
@@ -933,6 +937,202 @@ function saveSystemDirectoryConfig(config) {
   localStorage.setItem(systemDirectoryConfigKey, JSON.stringify(config));
 }
 
+function saveSystemDirectoryRuntime(runtime) {
+  localStorage.setItem(systemDirectoryRuntimeKey, JSON.stringify(runtime));
+}
+
+function updateEntraRuntime(nextValues) {
+  const runtime = getSystemDirectoryRuntime();
+  runtime.entra = {
+    ...systemDirectoryRuntimeDefaults.entra,
+    ...runtime.entra,
+    ...nextValues,
+  };
+  saveSystemDirectoryRuntime(runtime);
+  return runtime.entra;
+}
+
+function getEntraRedirectUri() {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function normalizeEntraScopes(value) {
+  const scopes = String(value || "")
+    .split(/[\s,]+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+  return scopes.length ? Array.from(new Set(scopes)) : ["User.Read"];
+}
+
+function createEntraMsalApp(config = getSystemDirectoryConfig()) {
+  const clientId = String(config.entra.clientId || "").trim();
+  if (!clientId) {
+    throw new Error("Entra 애플리케이션 Client ID를 먼저 입력하세요.");
+  }
+  if (!window.msal?.PublicClientApplication) {
+    throw new Error("MSAL Browser 라이브러리를 불러오지 못했습니다.");
+  }
+
+  const tenantId = String(config.entra.tenantId || "organizations").trim() || "organizations";
+  return new window.msal.PublicClientApplication({
+    auth: {
+      clientId,
+      authority: `https://login.microsoftonline.com/${encodeURIComponent(tenantId)}`,
+      redirectUri: getEntraRedirectUri(),
+      navigateToLoginRequestUrl: false,
+    },
+    cache: {
+      cacheLocation: "sessionStorage",
+      storeAuthStateInCookie: false,
+    },
+  });
+}
+
+async function initializeMsalApp(msalApp) {
+  if (typeof msalApp.initialize === "function") {
+    await msalApp.initialize();
+  }
+  return msalApp;
+}
+
+function getActiveEntraAccount(msalApp) {
+  const active = msalApp.getActiveAccount?.();
+  if (active) return active;
+  const accounts = msalApp.getAllAccounts();
+  if (accounts.length > 0) {
+    msalApp.setActiveAccount(accounts[0]);
+    return accounts[0];
+  }
+  return null;
+}
+
+function graphHeaders(accessToken, countRequest = false) {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  if (countRequest) headers.ConsistencyLevel = "eventual";
+  return headers;
+}
+
+async function fetchGraphJson(accessToken, path, countRequest = false) {
+  const response = await fetch(`https://graph.microsoft.com/v1.0/${path}`, {
+    headers: graphHeaders(accessToken, countRequest),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = payload?.error?.message || `Microsoft Graph 요청 실패 (${response.status})`;
+    throw new Error(message);
+  }
+  return payload;
+}
+
+async function fetchGraphCount(accessToken, resource) {
+  const payload = await fetchGraphJson(accessToken, `${resource}?$top=1&$count=true`, true);
+  return Number.parseInt(payload["@odata.count"], 10) || 0;
+}
+
+function renderCurrentRoute() {
+  openRoute(currentRoute || "home");
+}
+
+async function syncEntraDirectory({ interactive = false, msalApp = null, account = null } = {}) {
+  const config = getSystemDirectoryConfig();
+  const app = msalApp || await initializeMsalApp(createEntraMsalApp(config));
+  const scopes = normalizeEntraScopes(config.entra.scopes);
+  const activeAccount = account || getActiveEntraAccount(app);
+
+  if (!activeAccount) {
+    if (interactive) {
+      sessionStorage.setItem(entraReturnRouteKey, "directory");
+      await app.loginRedirect({ scopes });
+      return null;
+    }
+    updateEntraRuntime({ connectionStatus: "not_configured", error: "로그인된 Entra 계정이 없습니다." });
+    return null;
+  }
+
+  app.setActiveAccount(activeAccount);
+  updateEntraRuntime({ connectionStatus: "testing", error: "" });
+
+  let tokenResponse;
+  try {
+    tokenResponse = await app.acquireTokenSilent({ scopes, account: activeAccount });
+  } catch (error) {
+    const interactionError = window.msal?.InteractionRequiredAuthError;
+    const needsInteraction = interactionError
+      ? error instanceof interactionError
+      : /interaction_required|login_required|consent_required/i.test(`${error.errorCode || ""} ${error.message || ""}`);
+    if (interactive && needsInteraction) {
+      sessionStorage.setItem(entraReturnRouteKey, "directory");
+      await app.acquireTokenRedirect({ scopes, account: activeAccount });
+      return null;
+    }
+    throw error;
+  }
+
+  const accessToken = tokenResponse.accessToken;
+  const [profile, accountCount, groupCount] = await Promise.all([
+    fetchGraphJson(accessToken, "me?$select=displayName,userPrincipalName"),
+    fetchGraphCount(accessToken, "users"),
+    fetchGraphCount(accessToken, "groups"),
+  ]);
+
+  return updateEntraRuntime({
+    connectionStatus: "connected",
+    accountCount,
+    groupCount,
+    syncedAt: new Date().toISOString(),
+    accountName: profile.displayName || activeAccount.name || "",
+    accountUsername: profile.userPrincipalName || activeAccount.username || "",
+    error: "",
+  });
+}
+
+async function connectEntraDirectory() {
+  const config = getSystemDirectoryConfig();
+  const app = await initializeMsalApp(createEntraMsalApp(config));
+  sessionStorage.setItem(entraReturnRouteKey, "directory");
+  await app.loginRedirect({ scopes: normalizeEntraScopes(config.entra.scopes) });
+}
+
+async function disconnectEntraDirectory() {
+  const config = getSystemDirectoryConfig();
+  updateEntraRuntime(systemDirectoryRuntimeDefaults.entra);
+  if (!String(config.entra.clientId || "").trim() || !window.msal?.PublicClientApplication) {
+    renderCurrentRoute();
+    return;
+  }
+
+  const app = await initializeMsalApp(createEntraMsalApp(config));
+  const account = getActiveEntraAccount(app);
+  if (!account) {
+    renderCurrentRoute();
+    return;
+  }
+  await app.logoutRedirect({ account, postLogoutRedirectUri: getEntraRedirectUri() });
+}
+
+async function handleEntraRedirect() {
+  const config = getSystemDirectoryConfig();
+  if (!String(config.entra.clientId || "").trim() || !window.msal?.PublicClientApplication) return;
+
+  try {
+    const app = await initializeMsalApp(createEntraMsalApp(config));
+    const result = await app.handleRedirectPromise();
+    if (!result?.account) return;
+
+    app.setActiveAccount(result.account);
+    await syncEntraDirectory({ msalApp: app, account: result.account });
+    const nextRoute = sessionStorage.getItem(entraReturnRouteKey) || "directory";
+    sessionStorage.removeItem(entraReturnRouteKey);
+    openRoute(nextRoute);
+  } catch (error) {
+    updateEntraRuntime({
+      connectionStatus: "error",
+      error: error.message || "Entra OAuth 처리 중 오류가 발생했습니다.",
+    });
+    openRoute("directory");
+  }
+}
+
 function externalLink(href, label, iconName = "external-link") {
   return `
     <a class="directory-link" href="${escapeHtml(href)}" target="_blank" rel="noreferrer">
@@ -965,6 +1165,13 @@ function displayCount(value, enabled) {
   return Number.isFinite(count) && count > 0 ? count.toLocaleString("ko-KR") : "없음";
 }
 
+function formatSyncTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
+}
+
 function buildSystemEntries(config) {
   const runtime = getSystemDirectoryRuntime();
   const workspaceUrl = normalizeUrl(config.slack.workspaceUrl);
@@ -985,6 +1192,8 @@ function buildSystemEntries(config) {
         ["Tenant", config.entra.tenantName],
         ["Tenant ID", tenantId],
         ["Primary domain", config.entra.primaryDomain],
+        ["Signed in", runtime.entra.accountUsername || "-"],
+        ["Last sync", formatSyncTime(runtime.entra.syncedAt)],
       ],
       links: [
         ["Entra 관리자 센터", "https://entra.microsoft.com/", "shield-check"],
@@ -1073,6 +1282,12 @@ function systemEntryCard(entry) {
 }
 
 function systemSettingsForm(config) {
+  const runtime = getSystemDirectoryRuntime();
+  const entraStatus = integrationStatusMeta(
+    runtime.entra.connectionStatus,
+    runtime.entra.connectionStatus !== "not_configured",
+    runtime.entra.accountCount,
+  );
   return `
     <form class="directory-form" id="systemDirectoryForm">
       <section class="directory-form-section featured">
@@ -1080,16 +1295,31 @@ function systemSettingsForm(config) {
           ${icon("key-round")}
           <div>
             <h4>Microsoft Entra ID</h4>
-            <p>테스트에 먼저 사용할 identity provider의 연결 기준값입니다.</p>
+            <p>SPA OAuth 설정으로 로그인하고 Microsoft Graph에서 사용자/그룹 수를 동기화합니다.</p>
           </div>
         </div>
         <div class="directory-field-grid">
           ${directoryInput("entraTenantName", "Tenant name", config.entra.tenantName)}
           ${directoryInput("entraTenantId", "Tenant ID", config.entra.tenantId)}
+          ${directoryInput("entraClientId", "Application client ID", config.entra.clientId)}
           ${directoryInput("entraPrimaryDomain", "Primary domain", config.entra.primaryDomain)}
           ${directoryInput("entraAdminAccount", "Admin account", config.entra.adminAccount)}
           ${directoryInput("entraOwner", "Owner", config.entra.owner)}
+          ${directoryInput("entraScopes", "Graph scopes", config.entra.scopes, true)}
           ${directoryInput("entraNote", "Note", config.entra.note, true)}
+        </div>
+        <div class="directory-oauth-panel">
+          <div class="directory-oauth-status">
+            <span class="directory-status ${entraStatus.className}">${escapeHtml(entraStatus.label)}</span>
+            <strong>${escapeHtml(runtime.entra.accountName || runtime.entra.accountUsername || entraStatus.detail)}</strong>
+            <small>Redirect URI: ${escapeHtml(getEntraRedirectUri())}</small>
+            ${runtime.entra.error ? `<small class="oauth-error">${escapeHtml(runtime.entra.error)}</small>` : ""}
+          </div>
+          <div class="button-row directory-oauth-actions">
+            <button class="primary-button" type="button" id="connectEntraOAuth">${icon("log-in")} Entra 로그인</button>
+            <button class="secondary-button" type="button" id="syncEntraOAuth">${icon("refresh-cw")} Graph 동기화</button>
+            <button class="danger-button" type="button" id="disconnectEntraOAuth">${icon("log-out")} 연동 해제</button>
+          </div>
         </div>
         <div class="directory-links settings-links">
           ${buildSystemEntries(config)[0].links.map(([label, href, iconName]) => externalLink(href, label, iconName)).join("")}
@@ -1147,6 +1377,35 @@ function directoryInput(name, label, value, wide = false) {
       <input name="${escapeHtml(name)}" type="text" value="${escapeHtml(value)}">
     </label>
   `;
+}
+
+function collectSystemDirectoryForm(form) {
+  const data = new FormData(form);
+  return {
+    entra: {
+      tenantName: data.get("entraTenantName"),
+      tenantId: data.get("entraTenantId"),
+      clientId: data.get("entraClientId"),
+      scopes: data.get("entraScopes"),
+      primaryDomain: data.get("entraPrimaryDomain"),
+      adminAccount: data.get("entraAdminAccount"),
+      owner: data.get("entraOwner"),
+      note: data.get("entraNote"),
+    },
+    google: {
+      domain: data.get("googleDomain"),
+      adminAccount: data.get("googleAdminAccount"),
+      owner: data.get("googleOwner"),
+      note: data.get("googleNote"),
+    },
+    slack: {
+      workspaceName: data.get("slackWorkspaceName"),
+      workspaceUrl: data.get("slackWorkspaceUrl"),
+      adminAccount: data.get("slackAdminAccount"),
+      owner: data.get("slackOwner"),
+      note: data.get("slackNote"),
+    },
+  };
 }
 
 function renderSystemDirectory() {
@@ -1219,40 +1478,61 @@ function renderIntegrationSettings() {
 function bindSystemDirectory() {
   const form = document.querySelector("#systemDirectoryForm");
   const resetButton = document.querySelector("#resetSystemDirectory");
+  const connectButton = document.querySelector("#connectEntraOAuth");
+  const syncButton = document.querySelector("#syncEntraOAuth");
+  const disconnectButton = document.querySelector("#disconnectEntraOAuth");
   if (!form) return;
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const data = new FormData(form);
-    saveSystemDirectoryConfig({
-      entra: {
-        tenantName: data.get("entraTenantName"),
-        tenantId: data.get("entraTenantId"),
-        primaryDomain: data.get("entraPrimaryDomain"),
-        adminAccount: data.get("entraAdminAccount"),
-        owner: data.get("entraOwner"),
-        note: data.get("entraNote"),
-      },
-      google: {
-        domain: data.get("googleDomain"),
-        adminAccount: data.get("googleAdminAccount"),
-        owner: data.get("googleOwner"),
-        note: data.get("googleNote"),
-      },
-      slack: {
-        workspaceName: data.get("slackWorkspaceName"),
-        workspaceUrl: data.get("slackWorkspaceUrl"),
-        adminAccount: data.get("slackAdminAccount"),
-        owner: data.get("slackOwner"),
-        note: data.get("slackNote"),
-      },
-    });
+    saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
     renderIntegrationSettings();
   });
 
   resetButton.addEventListener("click", () => {
     localStorage.removeItem(systemDirectoryConfigKey);
+    localStorage.removeItem(systemDirectoryRuntimeKey);
     renderIntegrationSettings();
+  });
+
+  connectButton.addEventListener("click", async () => {
+    saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
+    connectButton.disabled = true;
+    connectButton.innerHTML = `${icon("loader-2")} 로그인 이동 중`;
+    refreshIcons();
+    try {
+      await connectEntraDirectory();
+    } catch (error) {
+      updateEntraRuntime({ connectionStatus: "error", error: error.message || "Entra 로그인 시작 실패" });
+      renderIntegrationSettings();
+    }
+  });
+
+  syncButton.addEventListener("click", async () => {
+    saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
+    syncButton.disabled = true;
+    syncButton.innerHTML = `${icon("loader-2")} 동기화 중`;
+    refreshIcons();
+    try {
+      await syncEntraDirectory({ interactive: true });
+      renderIntegrationSettings();
+    } catch (error) {
+      updateEntraRuntime({ connectionStatus: "error", error: error.message || "Graph 동기화 실패" });
+      renderIntegrationSettings();
+    }
+  });
+
+  disconnectButton.addEventListener("click", async () => {
+    saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
+    disconnectButton.disabled = true;
+    disconnectButton.innerHTML = `${icon("loader-2")} 해제 중`;
+    refreshIcons();
+    try {
+      await disconnectEntraDirectory();
+    } catch (error) {
+      updateEntraRuntime({ connectionStatus: "error", error: error.message || "Entra 로그아웃 실패" });
+      renderIntegrationSettings();
+    }
   });
 }
 
@@ -3660,6 +3940,7 @@ function bindNetCheck() {
 }
 
 function openRoute(route) {
+  currentRoute = route || "home";
   closeMobileSidebar();
   setActive(route);
 
@@ -3769,3 +4050,4 @@ renderSidebarTools();
 renderPolicyMenu();
 renderHome();
 refreshIcons();
+handleEntraRedirect();

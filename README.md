@@ -12,6 +12,7 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 정적 웹
 - 날씨, 공지 채널, 점심 메뉴, 회의실 현황을 보여주는 대시보드
 - 하단 `Ops Portfolio` 톱니바퀴 버튼으로 진입하는 Settings
 - Settings에서 메뉴 표시 여부, 대시보드 값, 연동 정보를 관리하는 로컬 설정
+- Microsoft Entra ID OAuth 로그인과 Microsoft Graph 사용자/그룹 수 동기화
 - 최초 Settings 진입 비밀번호 생성, 이후 비밀번호 검증과 변경
 - Slack, Google Workspace, Microsoft Entra ID 연동 정보 관리 화면
 - Lucide 아이콘과 반응형 레이아웃
@@ -85,10 +86,22 @@ Settings는 사이드바 하단 `Ops Portfolio` 영역의 톱니바퀴 버튼에
 Settings에서 제공하는 관리 화면:
 
 - `Show Menu`: 사이드바에 표시할 메뉴를 선택합니다.
-- `Integration Settings`: Slack, Google Workspace, Microsoft Entra ID 연결 표시값과 런타임 상태를 관리합니다.
+- `Integration Settings`: Slack, Google Workspace 표시값과 Microsoft Entra ID OAuth/Graph 동기화를 관리합니다.
 - `Security Settings`: Settings 진입 비밀번호를 변경하거나 다시 잠급니다.
 
 비밀번호는 서버로 전송하지 않으며, 현재 정적 앱 구조에 맞춰 브라우저 LocalStorage에 salt와 hash 형태로 저장합니다. 브라우저/프로필을 바꾸면 별도로 다시 설정해야 합니다.
+
+### Microsoft Entra ID OAuth
+
+Entra ID 연동은 정적 SPA 구조에 맞춰 MSAL Browser의 Authorization Code + PKCE 흐름을 사용합니다. Azure Portal의 App registration에서 플랫폼을 `Single-page application`으로 등록하고, Settings 화면에 표시되는 Redirect URI를 추가해야 합니다.
+
+필수 설정:
+
+- Application client ID
+- Tenant ID 또는 `organizations`
+- Graph scopes: 기본값은 `User.Read Directory.Read.All`
+
+`Directory.Read.All`은 사용자/그룹 수 조회에 필요하며 tenant 관리자 동의가 필요할 수 있습니다. 토큰 캐시는 브라우저 `sessionStorage`에 보관하고, 동기화 결과만 LocalStorage 런타임 상태에 저장합니다.
 
 ## Local Development
 

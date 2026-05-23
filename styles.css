@@ -1635,6 +1635,55 @@ select:focus {
   margin-top: 0;
 }
 
+.directory-oauth-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(23, 105, 224, 0.2);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.directory-oauth-status {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.directory-oauth-status .directory-status {
+  width: fit-content;
+}
+
+.directory-oauth-status strong,
+.directory-oauth-status small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.directory-oauth-status strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.directory-oauth-status small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.directory-oauth-status .oauth-error {
+  color: var(--rose);
+}
+
+.directory-oauth-actions {
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
 .speed-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2615,6 +2664,14 @@ select:focus {
   .directory-grid,
   .directory-health {
     grid-template-columns: 1fr;
+  }
+
+  .directory-oauth-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .directory-oauth-actions {
+    justify-content: flex-start;
   }
 
   .hero-card.primary,
