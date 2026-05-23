@@ -1177,7 +1177,6 @@ function buildSystemEntries(config) {
   const workspaceUrl = normalizeUrl(config.slack.workspaceUrl);
   const slackBase = workspaceUrl.replace(/\/+$/, "");
   const googleDomain = String(config.google.domain || "").trim();
-  const tenantId = String(config.entra.tenantId || "organizations").trim();
   return [
     {
       key: "entra",
@@ -1190,9 +1189,6 @@ function buildSystemEntries(config) {
       groupCount: runtime.entra.groupCount,
       details: [
         ["Tenant", config.entra.tenantName],
-        ["Tenant ID", tenantId],
-        ["Primary domain", config.entra.primaryDomain],
-        ["Signed in", runtime.entra.accountUsername || "-"],
         ["Last sync", formatSyncTime(runtime.entra.syncedAt)],
       ],
       links: [
@@ -1312,6 +1308,7 @@ function systemSettingsForm(config) {
           <div class="directory-oauth-status">
             <span class="directory-status ${entraStatus.className}">${escapeHtml(entraStatus.label)}</span>
             <strong>${escapeHtml(runtime.entra.accountName || runtime.entra.accountUsername || entraStatus.detail)}</strong>
+            <small>Signed in: ${escapeHtml(runtime.entra.accountUsername || "-")}</small>
             <small>Redirect URI: ${escapeHtml(getEntraRedirectUri())}</small>
             ${runtime.entra.error ? `<small class="oauth-error">${escapeHtml(runtime.entra.error)}</small>` : ""}
           </div>
