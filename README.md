@@ -47,6 +47,10 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 정적 웹
 
 빌드 도구 없이 운영합니다. 저장 후 브라우저 새로고침으로 확인하고, JavaScript 문법은 `node --check app.js`로 검증합니다.
 
+## Implementation Note
+
+이 프로젝트의 구현 작업은 Codex를 이용한 바이브 코딩 방식으로 진행했습니다.
+
 ## Project Structure
 
 ```text
