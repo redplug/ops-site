@@ -26,6 +26,7 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 웹 포털
 | Policy Navigator | Official | 사내 IT 정책 항목과 요청 흐름을 탐색하는 메뉴 |
 | System Directory | Official | Slack, Google Workspace, Microsoft Entra ID 연동 현황 관리 |
 | Signature Creator | Official | 공식 이메일 서명 생성 |
+| IT Onboarding Guide | Official | 신규 입사자 IT 환경 셋업 체크리스트 |
 | Text Cleaner | Labs | 공백, 줄바꿈, 특수문자 정리 |
 | Image Studio | Labs | 이미지 리사이즈, 크롭, 포맷 변환 |
 | Secure PDF | Labs | PDF 보관 암호화, 복호화, 병합, 페이지 추출 |

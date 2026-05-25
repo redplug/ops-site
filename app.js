@@ -35,7 +35,7 @@ const labTools = [
   { key: "lunch", cat: "Dining", name: "Lunch Guide", desc: "잠실 근처 점심 후보와 랜덤 추천을 연결할 수 있습니다.", status: "Labs", icon: "map-pin" },
 ];
 
-const readyToolKeys = new Set(["directory", "signature", "netcheck", "imagestudio", "pdf", "diff", "textcleaner"]);
+const readyToolKeys = new Set(["directory", "signature", "onboarding", "netcheck", "imagestudio", "pdf", "diff", "textcleaner"]);
 const visibleTools = [...officialTools, ...labTools].filter((tool) => readyToolKeys.has(tool.key));
 
 const policyTools = policies.map((policy) => ({
@@ -929,6 +929,141 @@ function renderPlaceholder(tool) {
             <p>이 화면은 포트폴리오 포털의 확장 지점입니다. 다음 단계에서 실제 폼, 계산기, 파일 처리, API 연동으로 교체합니다.</p>
           </div>
         </div>
+      </div>
+    </section>
+  `;
+  refreshIcons();
+}
+
+const onboardingPhases = [
+  {
+    title: "입사 전 D-5 ~ D-1",
+    owner: "IT Ops / HR",
+    goal: "계정, 장비, 접근 권한을 첫 출근 전에 준비합니다.",
+    items: [
+      "HR 입사자 정보 확인: 영문명, 개인 연락처, 부서, 직무, 매니저, 입사일",
+      "회사 이메일과 Google Workspace 또는 Microsoft 365 기본 계정 생성",
+      "Slack, Notion, GitHub, Jira, Confluence 초대 발송",
+      "역할별 기본 그룹 지정: All Hands, 부서 채널, 보안 공지, 개발 조직",
+      "노트북, 충전기, 모니터, 허브, 보안키 또는 OTP 수령 준비",
+      "MDM 등록 대상 장비 확인 및 초기화 이미지 적용",
+    ],
+  },
+  {
+    title: "Day 1 오전",
+    owner: "IT Ops",
+    goal: "업무 시작에 필요한 인증과 장비 사용을 완료합니다.",
+    items: [
+      "신분 확인 후 노트북과 주변기기 지급, 자산 번호 안내",
+      "초기 비밀번호 변경, MFA 등록, 백업 인증 수단 설정",
+      "MDM 프로필 설치 상태 확인: 디스크 암호화, 화면 잠금, 패치 정책",
+      "Wi-Fi, VPN, 프린터, 회의실 디스플레이 연결 테스트",
+      "Slack 프로필, 캘린더 타임존, 이메일 서명 기본값 설정",
+      "보안 교육 링크와 피싱 신고 채널 안내",
+    ],
+  },
+  {
+    title: "Day 1 오후",
+    owner: "Manager / Buddy",
+    goal: "팀 업무 도구와 개발 환경의 최소 접근을 검증합니다.",
+    items: [
+      "팀 Slack 채널, Notion 팀스페이스, Jira 프로젝트 접근 확인",
+      "GitHub SSO 인증, 조직 초대 수락, 2FA 활성화 확인",
+      "개발자라면 SSH key 또는 GPG key 등록 정책 안내",
+      "사내 패키지 저장소, Docker registry, VPN 접근 테스트",
+      "권한 누락 항목은 Helpdesk 티켓으로 요청 경로 통일",
+      "첫 주 온보딩 일정과 필수 미팅 캘린더 확인",
+    ],
+  },
+  {
+    title: "첫 주",
+    owner: "Employee / IT Ops",
+    goal: "보안 기준과 협업 흐름을 안정화합니다.",
+    items: [
+      "보안 교육, 개인정보 처리, 오픈소스 라이선스 가이드 수료",
+      "비밀번호 관리자 사용법과 secret 저장 금지 원칙 확인",
+      "장비 분실/파손, 계정 잠김, 권한 요청 프로세스 숙지",
+      "부서별 필수 SaaS 접근 권한 최종 점검",
+      "개발/운영 권한은 최소 권한 원칙으로 별도 승인 진행",
+      "온보딩 체크리스트 완료 여부를 매니저와 리뷰",
+    ],
+  },
+];
+
+const onboardingAccessRows = [
+  ["기본 계정", "회사 이메일, SSO, MFA, 비밀번호 관리자", "IT Ops"],
+  ["커뮤니케이션", "Slack, Google Calendar 또는 Outlook, Zoom/Meet", "IT Ops"],
+  ["문서/업무", "Notion, Confluence, Jira, Google Drive", "Manager"],
+  ["개발", "GitHub, IDE 라이선스, package registry, staging 접근", "Tech Lead"],
+  ["보안", "MDM, EDR, VPN, 보안 교육, 피싱 신고 채널", "Security"],
+  ["시설", "출입 카드, 회의실 예약, 프린터, 좌석 안내", "Office"],
+];
+
+function renderOnboardingGuide() {
+  viewTitle.textContent = "IT ONBOARDING GUIDE";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view onboarding-view">
+      <div class="tool-panel-header">
+        <div>
+          <h3>IT Onboarding Guide</h3>
+          <p>일반적인 IT 회사 신입 입사자의 첫 주 환경 셋업 체크리스트 샘플입니다.</p>
+        </div>
+        <button class="secondary-button" type="button" data-open="home">홈으로</button>
+      </div>
+      <div class="tool-body">
+        <section class="onboarding-summary">
+          <article>${icon("user-plus")}<strong>4</strong><span>단계 일정</span></article>
+          <article>${icon("key-round")}<strong>6</strong><span>권한 영역</span></article>
+          <article>${icon("shield-check")}<strong>MFA</strong><span>필수 보안</span></article>
+          <article>${icon("laptop")}<strong>MDM</strong><span>장비 관리</span></article>
+        </section>
+
+        <section class="onboarding-layout">
+          <div class="onboarding-main">
+            ${onboardingPhases.map((phase) => `
+              <article class="onboarding-phase">
+                <div class="onboarding-phase-head">
+                  <div>
+                    <span>${escapeHtml(phase.owner)}</span>
+                    <h4>${escapeHtml(phase.title)}</h4>
+                  </div>
+                  ${icon("clipboard-check")}
+                </div>
+                <p>${escapeHtml(phase.goal)}</p>
+                <ul>
+                  ${phase.items.map((item) => `<li>${icon("check")}<span>${escapeHtml(item)}</span></li>`).join("")}
+                </ul>
+              </article>
+            `).join("")}
+          </div>
+
+          <aside class="onboarding-side">
+            <section class="onboarding-card">
+              <h4>${icon("list-checks")} 권한 매트릭스</h4>
+              <div class="onboarding-access-list">
+                ${onboardingAccessRows.map(([label, detail, owner]) => `
+                  <div>
+                    <strong>${escapeHtml(label)}</strong>
+                    <span>${escapeHtml(detail)}</span>
+                    <small>${escapeHtml(owner)}</small>
+                  </div>
+                `).join("")}
+              </div>
+            </section>
+
+            <section class="onboarding-card">
+              <h4>${icon("file-text")} 요청서 샘플</h4>
+              <div class="onboarding-request">
+                <p><strong>요청 유형</strong><span>신규 입사자 IT 셋업</span></p>
+                <p><strong>입사자</strong><span>홍길동 / Backend Engineer / Platform Team</span></p>
+                <p><strong>필요 장비</strong><span>MacBook Pro 14, USB-C Hub, 보안키</span></p>
+                <p><strong>필요 권한</strong><span>GitHub org, Jira Platform project, Notion teamspace</span></p>
+                <p><strong>완료 기준</strong><span>SSO, MFA, MDM, VPN, GitHub 접근 확인</span></p>
+              </div>
+            </section>
+          </aside>
+        </section>
       </div>
     </section>
   `;
@@ -4134,6 +4269,11 @@ function openRoute(route) {
 
   if (route === "signature") {
     renderSignatureCreator();
+    return;
+  }
+
+  if (route === "onboarding") {
+    renderOnboardingGuide();
     return;
   }
 
