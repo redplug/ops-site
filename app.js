@@ -75,6 +75,17 @@ const settingsSections = [
   { key: "settings-security", name: "Security Settings", desc: "Settings 진입 비밀번호를 변경합니다.", icon: "lock-keyhole" },
 ];
 let currentRoute = "home";
+let serverHasPassword = false;
+let serverAuthenticated = false;
+let serverPasswordMeta = null;
+let serverPasswordHistory = [];
+const serverSettingKeys = [
+  menuVisibilityKey,
+  dashboardConfigKey,
+  systemDirectoryConfigKey,
+  systemDirectoryRuntimeKey,
+  sidebarCollapsedKey,
+];
 
 const defaultDashboardConfig = {
   channelLabel: "IT Comm.",
@@ -172,11 +183,79 @@ function writeStoredJson(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
     persistSettingValue(key, value);
+    void persistRemoteSetting(key, value);
     return true;
   } catch {
     persistSettingValue(key, value);
+    void persistRemoteSetting(key, value);
     return false;
   }
+}
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(path, {
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `요청 실패 (${response.status})`);
+  }
+  return payload;
+}
+
+function applyServerSettings(payload) {
+  serverHasPassword = Boolean(payload.hasPassword);
+  serverAuthenticated = Boolean(payload.authenticated);
+  serverPasswordMeta = payload.passwordMeta || null;
+  serverPasswordHistory = Array.isArray(payload.passwordHistory) ? payload.passwordHistory : [];
+
+  Object.entries(payload.settings || {}).forEach(([key, value]) => {
+    if (!persistentSettingKeys.includes(key)) return;
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {}
+    persistSettingValue(key, value);
+  });
+}
+
+async function loadServerSettings() {
+  try {
+    applyServerSettings(await apiRequest("/api/settings/bootstrap"));
+  } catch {}
+}
+
+async function persistRemoteSetting(key, value) {
+  if (!serverAuthenticated || !serverSettingKeys.includes(key)) return false;
+  try {
+    await apiRequest("/api/settings/value", {
+      method: "PUT",
+      body: JSON.stringify({ key, value }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function writeStoredJsonNow(key, value) {
+  const savedToStorage = writeStoredJson(key, value);
+  const savedToServer = await persistRemoteSetting(key, value);
+  return savedToStorage || savedToServer;
+}
+
+async function syncLocalSettingsToServer() {
+  if (!serverAuthenticated) return;
+  await Promise.all(serverSettingKeys.map(async (key) => {
+    const value = readStoredJson(key);
+    if (value !== null) {
+      await persistRemoteSetting(key, value);
+    }
+  }));
 }
 
 function openPersistentStore() {
@@ -250,6 +329,9 @@ function removeStoredJson(key) {
   } catch {}
   if (!persistentSettingKeys.includes(key)) return;
   void transactPersistentStore("readwrite", (store) => store.delete(key)).catch(() => {});
+  if (serverAuthenticated) {
+    void apiRequest(`/api/settings/value?key=${encodeURIComponent(key)}`, { method: "DELETE" }).catch(() => {});
+  }
 }
 
 async function readPersistentValue(key) {
@@ -281,11 +363,7 @@ function isSettingsPasswordRecord(record) {
 }
 
 function getSettingsPasswordRecord() {
-  const storedRecord = readStoredJson(settingsPasswordKey);
-  if (isSettingsPasswordRecord(storedRecord)) {
-    return storedRecord;
-  }
-
+  if (serverHasPassword) return { hash: "server-managed" };
   return null;
 }
 
@@ -353,31 +431,25 @@ async function hashSettingsPassword(password, salt = randomHex()) {
 }
 
 async function verifySettingsPassword(password) {
-  const record = getSettingsPasswordRecord();
-  if (!record?.salt || !record?.hash) return false;
-  const next = record.version === 2
-    ? { hash: await pbkdf2Hex(password, record.salt, Number.parseInt(record.iterations, 10) || 210000) }
-    : { hash: await sha256Hex(`${record.salt}:${password}`) };
-  return next.hash === record.hash;
+  try {
+    applyServerSettings(await apiRequest("/api/settings/password/verify", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }));
+    await syncLocalSettingsToServer();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function saveSettingsPassword(password) {
-  const existingRecord = getSettingsPasswordRecord();
-  const now = new Date().toISOString();
-  const record = {
-    ...(await hashSettingsPassword(password)),
-    createdAt: existingRecord?.createdAt || now,
-    updatedAt: now,
-  };
-  const savedToStorage = writeStoredJson(settingsPasswordKey, record);
-  const savedToPersistentStore = await persistSettingValueNow(settingsPasswordKey, record);
-
-  if (!savedToStorage && !savedToPersistentStore) {
-    throw new Error("브라우저 저장소에 비밀번호 설정을 저장할 수 없습니다.");
-  }
-
-  recordSettingsPasswordEvent(existingRecord ? "changed" : "created");
-  return record;
+  applyServerSettings(await apiRequest("/api/settings/password/init", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  }));
+  await syncLocalSettingsToServer();
+  return { hash: "server-managed" };
 }
 
 function recordSettingsPasswordEvent(type) {
@@ -445,8 +517,8 @@ function getDashboardWeatherConfig(dashboard) {
   };
 }
 
-function saveDashboardConfig(config) {
-  writeStoredJson(dashboardConfigKey, config);
+async function saveDashboardConfig(config) {
+  await writeStoredJsonNow(dashboardConfigKey, config);
 }
 
 function weatherCodeMeta(code, isDay = true) {
@@ -833,7 +905,7 @@ async function saveDashboardFromForm(form) {
     roomTitle: previous.roomTitle,
     roomItems: previous.roomItems,
   };
-  saveDashboardConfig(config);
+  await saveDashboardConfig(config);
   renderHome();
 }
 
@@ -1023,10 +1095,8 @@ async function handleSettingsAuthSubmit(form, hasPassword) {
 }
 
 function renderSettingsSecurity() {
-  const passwordRecord = getSettingsPasswordRecord();
-  const passwordHistory = Array.isArray(readStoredJson(settingsPasswordHistoryKey))
-    ? readStoredJson(settingsPasswordHistoryKey)
-    : [];
+  const passwordRecord = serverPasswordMeta;
+  const passwordHistory = serverPasswordHistory;
   viewTitle.textContent = "SETTINGS";
   content.className = "content custom-scrollbar";
   content.innerHTML = `
@@ -1085,10 +1155,6 @@ async function handleSettingsPasswordChange(form) {
   const newPassword = String(data.get("newPassword") || "");
   const confirmPassword = String(data.get("confirmPassword") || "");
 
-  if (!(await verifySettingsPassword(currentPassword))) {
-    result.innerHTML = resultRow("fail", "변경 실패", "현재 비밀번호가 일치하지 않습니다.");
-    return;
-  }
   if (newPassword.length < 4) {
     result.innerHTML = resultRow("warn", "비밀번호 짧음", "새 비밀번호는 4자 이상으로 설정하세요.");
     return;
@@ -1099,9 +1165,13 @@ async function handleSettingsPasswordChange(form) {
   }
 
   try {
-    await saveSettingsPassword(newPassword);
+    applyServerSettings(await apiRequest("/api/settings/password/change", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }));
+    await syncLocalSettingsToServer();
   } catch (error) {
-    result.innerHTML = resultRow("fail", "저장 실패", error.message);
+    result.innerHTML = resultRow("fail", "변경 실패", error.message);
     return;
   }
   form.reset();
@@ -1166,22 +1236,22 @@ function getSystemDirectoryRuntime() {
   }
 }
 
-function saveSystemDirectoryConfig(config) {
-  writeStoredJson(systemDirectoryConfigKey, config);
+async function saveSystemDirectoryConfig(config) {
+  await writeStoredJsonNow(systemDirectoryConfigKey, config);
 }
 
-function saveSystemDirectoryRuntime(runtime) {
-  writeStoredJson(systemDirectoryRuntimeKey, runtime);
+async function saveSystemDirectoryRuntime(runtime) {
+  await writeStoredJsonNow(systemDirectoryRuntimeKey, runtime);
 }
 
-function updateEntraRuntime(nextValues) {
+async function updateEntraRuntime(nextValues) {
   const runtime = getSystemDirectoryRuntime();
   runtime.entra = {
     ...systemDirectoryRuntimeDefaults.entra,
     ...runtime.entra,
     ...nextValues,
   };
-  saveSystemDirectoryRuntime(runtime);
+  await saveSystemDirectoryRuntime(runtime);
   return runtime.entra;
 }
 
@@ -1278,12 +1348,12 @@ async function syncEntraDirectory({ interactive = false, msalApp = null, account
       await app.loginRedirect({ scopes });
       return null;
     }
-    updateEntraRuntime({ connectionStatus: "not_configured", error: "로그인된 Entra 계정이 없습니다." });
+    await updateEntraRuntime({ connectionStatus: "not_configured", error: "로그인된 Entra 계정이 없습니다." });
     return null;
   }
 
   app.setActiveAccount(activeAccount);
-  updateEntraRuntime({ connectionStatus: "testing", error: "" });
+  await updateEntraRuntime({ connectionStatus: "testing", error: "" });
 
   let tokenResponse;
   try {
@@ -1332,7 +1402,7 @@ async function connectEntraDirectory() {
 
 async function disconnectEntraDirectory() {
   const config = getSystemDirectoryConfig();
-  updateEntraRuntime(systemDirectoryRuntimeDefaults.entra);
+  await updateEntraRuntime(systemDirectoryRuntimeDefaults.entra);
   if (!String(config.entra.clientId || "").trim() || !window.msal?.PublicClientApplication) {
     renderCurrentRoute();
     return;
@@ -1362,7 +1432,7 @@ async function handleEntraRedirect() {
     sessionStorage.removeItem(entraReturnRouteKey);
     openRoute(nextRoute);
   } catch (error) {
-    updateEntraRuntime({
+    await updateEntraRuntime({
       connectionStatus: "error",
       error: error.message || "Entra OAuth 처리 중 오류가 발생했습니다.",
     });
@@ -1739,9 +1809,9 @@ function bindSystemDirectory() {
   const disconnectButton = document.querySelector("#disconnectEntraOAuth");
   if (!form) return;
 
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
+    await saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
     renderIntegrationSettings();
   });
 
@@ -1752,20 +1822,20 @@ function bindSystemDirectory() {
   });
 
   connectButton.addEventListener("click", async () => {
-    saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
+    await saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
     connectButton.disabled = true;
     connectButton.innerHTML = `${icon("loader-2")} 로그인 이동 중`;
     refreshIcons();
     try {
       await connectEntraDirectory();
     } catch (error) {
-      updateEntraRuntime({ connectionStatus: "error", error: error.message || "Entra 로그인 시작 실패" });
+      await updateEntraRuntime({ connectionStatus: "error", error: error.message || "Entra 로그인 시작 실패" });
       renderIntegrationSettings();
     }
   });
 
   syncButton.addEventListener("click", async () => {
-    saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
+    await saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
     syncButton.disabled = true;
     syncButton.innerHTML = `${icon("loader-2")} 동기화 중`;
     refreshIcons();
@@ -1773,20 +1843,20 @@ function bindSystemDirectory() {
       await syncEntraDirectory({ interactive: true });
       renderIntegrationSettings();
     } catch (error) {
-      updateEntraRuntime({ connectionStatus: "error", error: error.message || "Graph 동기화 실패" });
+      await updateEntraRuntime({ connectionStatus: "error", error: error.message || "Graph 동기화 실패" });
       renderIntegrationSettings();
     }
   });
 
   disconnectButton.addEventListener("click", async () => {
-    saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
+    await saveSystemDirectoryConfig(collectSystemDirectoryForm(form));
     disconnectButton.disabled = true;
     disconnectButton.innerHTML = `${icon("loader-2")} 해제 중`;
     refreshIcons();
     try {
       await disconnectEntraDirectory();
     } catch (error) {
-      updateEntraRuntime({ connectionStatus: "error", error: error.message || "Entra 로그아웃 실패" });
+      await updateEntraRuntime({ connectionStatus: "error", error: error.message || "Entra 로그아웃 실패" });
       renderIntegrationSettings();
     }
   });
@@ -4303,6 +4373,7 @@ document.querySelector("#versionButton").addEventListener("click", () => openRou
 
 async function startApp() {
   await restorePersistentSettings();
+  await loadServerSettings();
   restoreSidebarState();
   renderSidebarTools();
   renderPolicyMenu();

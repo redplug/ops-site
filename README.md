@@ -1,6 +1,6 @@
 # Ops Portfolio Hub
 
-IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 정적 웹 포털입니다. 대시보드, 공식 운영 메뉴, 개인/업무 유틸리티, 설정 화면을 Vanilla JavaScript 기반 SPA 형태로 제공합니다.
+IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 웹 포털입니다. 대시보드, 공식 운영 메뉴, 개인/업무 유틸리티, 설정 화면을 Vanilla JavaScript 기반 SPA 형태로 제공하고, Settings 값은 서버 저장소에 유지합니다.
 
 현재 사이트는 포트폴리오용으로 동작 가능한 도구를 우선 배치하고, 설정 화면에서 메뉴와 대시보드 값을 관리할 수 있는 구조입니다.
 
@@ -11,12 +11,12 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 정적 웹
 - 좌측 사이드바 기반 포털 네비게이션과 접기/펼치기
 - 날씨, 공지 채널, 점심 메뉴, 회의실 현황을 보여주는 대시보드
 - 하단 `Ops Portfolio` 톱니바퀴 버튼으로 진입하는 Settings
-- Settings에서 메뉴 표시 여부, 대시보드 값, 연동 정보를 관리하는 로컬 설정
+- Settings에서 메뉴 표시 여부, 대시보드 값, 연동 정보를 관리하는 서버 저장 설정
 - Microsoft Entra ID OAuth 로그인과 Microsoft Graph 사용자/그룹 수 동기화
 - 최초 Settings 진입 비밀번호 생성, 이후 비밀번호 검증과 변경
 - Slack, Google Workspace, Microsoft Entra ID 연동 정보 관리 화면
 - Lucide 아이콘과 반응형 레이아웃
-- Docker + Nginx 기반 정적 사이트 배포
+- Docker + Node.js 기반 사이트/API 배포
 - GitHub Actions 기반 서버 자동 배포
 
 ## 구현 완료 도구
@@ -38,14 +38,15 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 정적 웹
 - CSS
 - Vanilla JavaScript
 - LocalStorage
+- Node.js built-in HTTP server
+- Docker volume based settings store
 - Lucide icons via CDN
 - Google Fonts via CDN
 - pdf-lib via CDN
-- Nginx container for production
 - Docker Compose on Linux server
 - GitHub Actions for CI/CD
 
-빌드 도구 없이 운영합니다. 저장 후 브라우저 새로고침으로 확인하고, JavaScript 문법은 `node --check app.js`로 검증합니다.
+빌드 도구 없이 운영합니다. 저장 후 브라우저 새로고침으로 확인하고, JavaScript 문법은 `node --check app.js`와 `node --check server.js`로 검증합니다.
 
 ## Implementation Note
 
@@ -58,8 +59,9 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 정적 웹
 ├── index.html                   # 앱 shell과 기본 DOM 구조
 ├── styles.css                   # 전체 레이아웃, 반응형, 도구 UI 스타일
 ├── app.js                       # 라우팅, 메뉴 데이터, 화면 렌더링, 도구 로직
-├── Dockerfile                   # Nginx 정적 사이트 이미지
-├── nginx.conf                   # 정적 파일 serving 설정
+├── server.js                    # 정적 파일 serving과 Settings 저장 API
+├── Dockerfile                   # Node.js 앱 컨테이너 이미지
+├── nginx.conf                   # 이전 Nginx serving 설정 참고 파일
 ├── compose.prod.yml             # 서버 배포용 Docker Compose
 ├── .github/workflows/deploy.yml # GitHub Actions 배포 파이프라인
 ├── AGENTS.md                    # Codex/gstack 작업 지침
@@ -75,17 +77,17 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 정적 웹
 - official/lab/policy 메뉴 데이터 정의
 - sidebar route 처리
 - 홈 대시보드 렌더링
-- Settings 화면과 로컬 설정 저장
+- Settings 화면과 서버 설정 저장 API 연동
 - 도구별 화면 렌더링
 - 브라우저 단독 실행 도구 로직 처리
 
-서버가 필요 없는 도구는 브라우저에서 바로 동작합니다. 설정값과 런타임 상태는 LocalStorage에 저장됩니다.
+서버가 필요 없는 도구는 브라우저에서 바로 동작합니다. Settings 비밀번호, 메뉴 표시 여부, 대시보드 값, 연동 설정, 동기화 결과는 서버의 Docker volume에 저장됩니다.
 
 ## Settings
 
 Settings는 사이드바 하단 `Ops Portfolio` 영역의 톱니바퀴 버튼에서 엽니다.
 
-첫 진입 시에는 `Initial Settings Password` 화면에서 로컬 비밀번호를 설정합니다. 이후 Settings 계열 화면에 진입할 때는 같은 브라우저 세션에서 비밀번호 검증을 통과해야 합니다.
+첫 진입 시에는 `Initial Settings Password` 화면에서 서버 비밀번호를 설정합니다. 이후 Settings 계열 화면에 진입할 때는 서버 저장 비밀번호 검증을 통과해야 합니다.
 
 Settings에서 제공하는 관리 화면:
 
@@ -93,7 +95,7 @@ Settings에서 제공하는 관리 화면:
 - `Integration Settings`: Slack, Google Workspace 표시값과 Microsoft Entra ID OAuth/Graph 동기화를 관리합니다.
 - `Security Settings`: Settings 진입 비밀번호를 변경하거나 다시 잠급니다.
 
-비밀번호는 서버로 전송하지 않으며, 현재 정적 앱 구조에 맞춰 브라우저 LocalStorage에 salt와 hash 형태로 저장합니다. 브라우저/프로필을 바꾸면 별도로 다시 설정해야 합니다.
+비밀번호 원문은 저장하지 않습니다. 서버는 PBKDF2-SHA-256 해시와 salt만 Docker volume에 저장하고, 브라우저에는 HttpOnly 세션 쿠키만 내려줍니다. Entra OAuth access token은 Microsoft MSAL 정책에 따라 브라우저 `sessionStorage`에만 보관합니다.
 
 ### Microsoft Entra ID OAuth
 
@@ -105,14 +107,14 @@ Entra ID 연동은 정적 SPA 구조에 맞춰 MSAL Browser의 Authorization Cod
 - Tenant ID 또는 `organizations`
 - Graph scopes: 기본값은 `User.Read Directory.Read.All Application.Read.All Device.Read.All`
 
-`Directory.Read.All`, `Application.Read.All`, `Device.Read.All`은 사용자/그룹/애플리케이션/디바이스 수 조회에 필요하며 tenant 관리자 동의가 필요할 수 있습니다. 토큰 캐시는 브라우저 `sessionStorage`에 보관하고, 동기화 결과만 LocalStorage 런타임 상태에 저장합니다.
+`Directory.Read.All`, `Application.Read.All`, `Device.Read.All`은 사용자/그룹/애플리케이션/디바이스 수 조회에 필요하며 tenant 관리자 동의가 필요할 수 있습니다. 토큰 캐시는 브라우저 `sessionStorage`에 보관하고, 동기화 결과는 서버 저장소에 기록합니다.
 
 ## Local Development
 
 로컬 미리보기:
 
 ```bash
-python3 -m http.server 4173
+PORT=4173 DATA_DIR=.local-data node server.js
 ```
 
 브라우저에서 접속:
@@ -186,7 +188,7 @@ GitHub private repo
 -> GitHub Actions
 -> SSH upload to Linux server
 -> docker compose build/up
--> Nginx container serves static files
+-> Node.js container serves static files and Settings API
 ```
 
 Production compose:

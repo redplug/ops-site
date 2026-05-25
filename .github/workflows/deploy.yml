@@ -24,7 +24,9 @@ jobs:
           test -f index.html
           test -f styles.css
           test -f app.js
+          test -f server.js
           node --check app.js
+          node --check server.js
 
       - name: Pack release
         run: |
@@ -35,7 +37,7 @@ jobs:
             --exclude='.gstack-codex-txn' \
             --exclude='node_modules' \
             -czf ops-site-release.tgz \
-            index.html styles.css app.js Dockerfile nginx.conf compose.prod.yml
+            index.html styles.css app.js server.js Dockerfile nginx.conf compose.prod.yml
 
       - name: Configure SSH
         env:

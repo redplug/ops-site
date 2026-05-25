@@ -7,4 +7,9 @@ services:
     container_name: ops-site
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-8080}:80"
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      - ops-site-data:/app/data
+
+volumes:
+  ops-site-data:
