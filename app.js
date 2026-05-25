@@ -54,6 +54,19 @@ const systemDirectoryRuntimeKey = "opsHubSystemDirectoryRuntime";
 const entraReturnRouteKey = "opsHubEntraReturnRoute";
 const sidebarCollapsedKey = "opsHubSidebarCollapsed";
 const settingsPasswordKey = "opsHubSettingsPassword";
+const settingsPasswordHistoryKey = "opsHubSettingsPasswordHistory";
+const persistentStoreName = "opsHubPersistentSettings";
+const persistentStoreVersion = 1;
+const persistentValueStore = "settings";
+const persistentSettingKeys = [
+  menuVisibilityKey,
+  dashboardConfigKey,
+  systemDirectoryConfigKey,
+  systemDirectoryRuntimeKey,
+  sidebarCollapsedKey,
+  settingsPasswordKey,
+  settingsPasswordHistoryKey,
+];
 let settingsUnlocked = false;
 const configurableMenuItems = [...officialTools, ...labTools, ...policyTools];
 const settingsSections = [
@@ -144,15 +157,136 @@ function getMenuVisibility() {
 }
 
 function saveMenuVisibility(visibility) {
-  localStorage.setItem(menuVisibilityKey, JSON.stringify(visibility));
+  writeStoredJson(menuVisibilityKey, visibility);
 }
 
-function getSettingsPasswordRecord() {
+function readStoredJson(key) {
   try {
-    return JSON.parse(localStorage.getItem(settingsPasswordKey) || "null");
+    return JSON.parse(localStorage.getItem(key) || "null");
   } catch {
     return null;
   }
+}
+
+function writeStoredJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    persistSettingValue(key, value);
+    return true;
+  } catch {
+    persistSettingValue(key, value);
+    return false;
+  }
+}
+
+function openPersistentStore() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error("IndexedDB를 사용할 수 없습니다."));
+      return;
+    }
+
+    const request = window.indexedDB.open(persistentStoreName, persistentStoreVersion);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(persistentValueStore)) {
+        database.createObjectStore(persistentValueStore, { keyPath: "key" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("IndexedDB 열기 실패"));
+  });
+}
+
+function transactPersistentStore(mode, callback) {
+  return openPersistentStore().then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction(persistentValueStore, mode);
+    const store = transaction.objectStore(persistentValueStore);
+    let request;
+    try {
+      request = callback(store);
+    } catch (error) {
+      database.close();
+      reject(error);
+      return;
+    }
+    transaction.oncomplete = () => {
+      database.close();
+      resolve(request?.result);
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error || new Error("IndexedDB transaction 실패"));
+    };
+  }));
+}
+
+function persistSettingValue(key, value) {
+  if (!persistentSettingKeys.includes(key)) return;
+  void transactPersistentStore("readwrite", (store) => store.put({
+    key,
+    value,
+    updatedAt: new Date().toISOString(),
+  })).catch(() => {});
+}
+
+async function persistSettingValueNow(key, value) {
+  if (!persistentSettingKeys.includes(key)) return false;
+  try {
+    await transactPersistentStore("readwrite", (store) => store.put({
+      key,
+      value,
+      updatedAt: new Date().toISOString(),
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeStoredJson(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+  if (!persistentSettingKeys.includes(key)) return;
+  void transactPersistentStore("readwrite", (store) => store.delete(key)).catch(() => {});
+}
+
+async function readPersistentValue(key) {
+  const entry = await transactPersistentStore("readonly", (store) => store.get(key));
+  return entry?.value ?? null;
+}
+
+async function restorePersistentSettings() {
+  await Promise.all(persistentSettingKeys.map(async (key) => {
+    try {
+      if (localStorage.getItem(key) !== null) return;
+      const value = await readPersistentValue(key);
+      if (value !== null) {
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+    } catch {}
+  }));
+}
+
+function isSettingsPasswordRecord(record) {
+  return Boolean(
+    record
+    && typeof record === "object"
+    && typeof record.salt === "string"
+    && typeof record.hash === "string"
+    && record.salt
+    && record.hash
+  );
+}
+
+function getSettingsPasswordRecord() {
+  const storedRecord = readStoredJson(settingsPasswordKey);
+  if (isSettingsPasswordRecord(storedRecord)) {
+    return storedRecord;
+  }
+
+  return null;
 }
 
 function randomHex(length = 16) {
@@ -179,22 +313,98 @@ async function sha256Hex(value) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function bytesToHex(bytes) {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function pbkdf2Hex(password, salt, iterations = 210000) {
+  if (!window.crypto?.subtle) {
+    return sha256Hex(`${salt}:${password}`);
+  }
+  const material = await window.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await window.crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: new TextEncoder().encode(salt),
+      iterations,
+      hash: "SHA-256",
+    },
+    material,
+    256,
+  );
+  return bytesToHex(new Uint8Array(bits));
+}
+
 async function hashSettingsPassword(password, salt = randomHex()) {
+  const iterations = 210000;
   return {
+    version: 2,
+    algorithm: "PBKDF2-SHA-256",
+    iterations,
     salt,
-    hash: await sha256Hex(`${salt}:${password}`),
+    hash: await pbkdf2Hex(password, salt, iterations),
   };
 }
 
 async function verifySettingsPassword(password) {
   const record = getSettingsPasswordRecord();
   if (!record?.salt || !record?.hash) return false;
-  const next = await hashSettingsPassword(password, record.salt);
+  const next = record.version === 2
+    ? { hash: await pbkdf2Hex(password, record.salt, Number.parseInt(record.iterations, 10) || 210000) }
+    : { hash: await sha256Hex(`${record.salt}:${password}`) };
   return next.hash === record.hash;
 }
 
 async function saveSettingsPassword(password) {
-  localStorage.setItem(settingsPasswordKey, JSON.stringify(await hashSettingsPassword(password)));
+  const existingRecord = getSettingsPasswordRecord();
+  const now = new Date().toISOString();
+  const record = {
+    ...(await hashSettingsPassword(password)),
+    createdAt: existingRecord?.createdAt || now,
+    updatedAt: now,
+  };
+  const savedToStorage = writeStoredJson(settingsPasswordKey, record);
+  const savedToPersistentStore = await persistSettingValueNow(settingsPasswordKey, record);
+
+  if (!savedToStorage && !savedToPersistentStore) {
+    throw new Error("브라우저 저장소에 비밀번호 설정을 저장할 수 없습니다.");
+  }
+
+  recordSettingsPasswordEvent(existingRecord ? "changed" : "created");
+  return record;
+}
+
+function recordSettingsPasswordEvent(type) {
+  const history = Array.isArray(readStoredJson(settingsPasswordHistoryKey))
+    ? readStoredJson(settingsPasswordHistoryKey)
+    : [];
+  const next = [
+    {
+      type,
+      at: new Date().toISOString(),
+    },
+    ...history,
+  ].slice(0, 20);
+  writeStoredJson(settingsPasswordHistoryKey, next);
+}
+
+function formatStoredDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function normalizeDashboardItems(items, defaults) {
@@ -236,7 +446,7 @@ function getDashboardWeatherConfig(dashboard) {
 }
 
 function saveDashboardConfig(config) {
-  localStorage.setItem(dashboardConfigKey, JSON.stringify(config));
+  writeStoredJson(dashboardConfigKey, config);
 }
 
 function weatherCodeMeta(code, isDay = true) {
@@ -431,7 +641,7 @@ function isMobileViewport() {
 
 function setSidebarCollapsed(collapsed, persist = true) {
   sidebar.classList.toggle("collapsed", collapsed);
-  if (persist) localStorage.setItem(sidebarCollapsedKey, JSON.stringify(collapsed));
+  if (persist) writeStoredJson(sidebarCollapsedKey, collapsed);
   const button = document.querySelector("#sidebarButton");
   if (button) {
     const mobile = isMobileViewport();
@@ -580,7 +790,7 @@ function bindDashboardEditor() {
   });
 
   resetButton.addEventListener("click", () => {
-    localStorage.removeItem(dashboardConfigKey);
+    removeStoredJson(dashboardConfigKey);
     renderHome();
   });
 
@@ -792,7 +1002,12 @@ async function handleSettingsAuthSubmit(form, hasPassword) {
       result.innerHTML = resultRow("fail", "확인 불일치", "새 비밀번호와 확인 입력이 다릅니다.");
       return;
     }
-    await saveSettingsPassword(password);
+    try {
+      await saveSettingsPassword(password);
+    } catch (error) {
+      result.innerHTML = resultRow("fail", "저장 실패", error.message);
+      return;
+    }
     settingsUnlocked = true;
     openSettingsRoute(targetRoute);
     return;
@@ -808,6 +1023,10 @@ async function handleSettingsAuthSubmit(form, hasPassword) {
 }
 
 function renderSettingsSecurity() {
+  const passwordRecord = getSettingsPasswordRecord();
+  const passwordHistory = Array.isArray(readStoredJson(settingsPasswordHistoryKey))
+    ? readStoredJson(settingsPasswordHistoryKey)
+    : [];
   viewTitle.textContent = "SETTINGS";
   content.className = "content custom-scrollbar";
   content.innerHTML = `
@@ -833,6 +1052,10 @@ function renderSettingsSecurity() {
             <div class="form-group">
               <label for="confirmSettingsPassword">Confirm New Password</label>
               <input id="confirmSettingsPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="4" required>
+            </div>
+            <div class="result-list wide">
+              ${resultRow("ok", "저장 상태", `비밀번호 설정이 브라우저 저장소에 기록되어 있습니다. 마지막 변경: ${formatStoredDate(passwordRecord?.updatedAt || passwordRecord?.createdAt)}`)}
+              ${passwordHistory.slice(0, 3).map((item) => resultRow("ok", item.type === "created" ? "생성 기록" : "변경 기록", formatStoredDate(item.at))).join("")}
             </div>
             <div class="button-row security-actions">
               <button class="primary-button" type="submit">${icon("save")} 변경 저장</button>
@@ -875,7 +1098,12 @@ async function handleSettingsPasswordChange(form) {
     return;
   }
 
-  await saveSettingsPassword(newPassword);
+  try {
+    await saveSettingsPassword(newPassword);
+  } catch (error) {
+    result.innerHTML = resultRow("fail", "저장 실패", error.message);
+    return;
+  }
   form.reset();
   result.innerHTML = resultRow("ok", "변경 완료", "다음 Settings 잠금 해제부터 새 비밀번호를 사용합니다.");
 }
@@ -939,11 +1167,11 @@ function getSystemDirectoryRuntime() {
 }
 
 function saveSystemDirectoryConfig(config) {
-  localStorage.setItem(systemDirectoryConfigKey, JSON.stringify(config));
+  writeStoredJson(systemDirectoryConfigKey, config);
 }
 
 function saveSystemDirectoryRuntime(runtime) {
-  localStorage.setItem(systemDirectoryRuntimeKey, JSON.stringify(runtime));
+  writeStoredJson(systemDirectoryRuntimeKey, runtime);
 }
 
 function updateEntraRuntime(nextValues) {
@@ -1518,8 +1746,8 @@ function bindSystemDirectory() {
   });
 
   resetButton.addEventListener("click", () => {
-    localStorage.removeItem(systemDirectoryConfigKey);
-    localStorage.removeItem(systemDirectoryRuntimeKey);
+    removeStoredJson(systemDirectoryConfigKey);
+    removeStoredJson(systemDirectoryRuntimeKey);
     renderIntegrationSettings();
   });
 
@@ -4073,9 +4301,14 @@ window.addEventListener("resize", restoreSidebarState);
 document.querySelector("#refreshButton").addEventListener("click", () => openRoute(document.querySelector("[data-route].active")?.dataset.route || "home"));
 document.querySelector("#versionButton").addEventListener("click", () => openRoute("textcleaner"));
 
-restoreSidebarState();
-renderSidebarTools();
-renderPolicyMenu();
-renderHome();
-refreshIcons();
-handleEntraRedirect();
+async function startApp() {
+  await restorePersistentSettings();
+  restoreSidebarState();
+  renderSidebarTools();
+  renderPolicyMenu();
+  renderHome();
+  refreshIcons();
+  await handleEntraRedirect();
+}
+
+void startApp();
