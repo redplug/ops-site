@@ -145,7 +145,7 @@ function settingsPayload(state, authenticated) {
   const settings = {};
   Object.entries(state.settings || {}).forEach(([key, value]) => {
     if (authenticated || publicSettingKeys.has(key)) {
-      settings[key] = value;
+      settings[key] = key === "opsHubSystemDirectoryConfig" ? sanitizeSystemDirectoryConfig(value) : value;
     }
   });
   return {
@@ -155,6 +155,120 @@ function settingsPayload(state, authenticated) {
     passwordMeta: authenticated ? passwordMeta(state.password) : null,
     passwordHistory: authenticated ? state.passwordHistory.slice(0, 20) : [],
   };
+}
+
+function sanitizeSystemDirectoryConfig(config = {}) {
+  const next = {
+    ...config,
+    entra: {
+      ...(config.entra || {}),
+      clientSecretConfigured: Boolean(config.entra?.clientSecret),
+    },
+  };
+  delete next.entra.clientSecret;
+  return next;
+}
+
+function mergeSystemDirectoryConfig(previous = {}, incoming = {}) {
+  const next = {
+    ...previous,
+    ...incoming,
+    entra: {
+      ...(previous.entra || {}),
+      ...(incoming.entra || {}),
+    },
+    google: {
+      ...(previous.google || {}),
+      ...(incoming.google || {}),
+    },
+    slack: {
+      ...(previous.slack || {}),
+      ...(incoming.slack || {}),
+    },
+  };
+  const incomingSecret = String(incoming.entra?.clientSecret || "");
+  if (incomingSecret.trim()) {
+    next.entra.clientSecret = incomingSecret;
+  } else if (previous.entra?.clientSecret) {
+    next.entra.clientSecret = previous.entra.clientSecret;
+  } else {
+    delete next.entra.clientSecret;
+  }
+  delete next.entra.clientSecretConfigured;
+  return next;
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = payload?.error_description || payload?.error?.message || payload?.error || `요청 실패 (${response.status})`;
+    throw new Error(message);
+  }
+  return payload;
+}
+
+async function fetchEntraToken(config) {
+  const tenantId = String(config.entra?.tenantId || "").trim();
+  const clientId = String(config.entra?.clientId || "").trim();
+  const clientSecret = String(config.entra?.clientSecret || "").trim();
+  if (!tenantId || tenantId === "organizations") {
+    throw new Error("Client Credentials 연동에는 실제 Tenant ID가 필요합니다.");
+  }
+  if (!clientId) throw new Error("Application client ID를 입력하세요.");
+  if (!clientSecret) throw new Error("Client secret을 입력하세요.");
+
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: "https://graph.microsoft.com/.default",
+    grant_type: "client_credentials",
+  });
+  return fetchJson(`https://login.microsoftonline.com/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+}
+
+async function fetchGraphJson(accessToken, path, countRequest = false) {
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  if (countRequest) headers.ConsistencyLevel = "eventual";
+  return fetchJson(`https://graph.microsoft.com/v1.0/${path}`, { headers });
+}
+
+async function fetchGraphCount(accessToken, resource) {
+  const payload = await fetchGraphJson(accessToken, `${resource}?$top=1&$count=true`, true);
+  return Number.parseInt(payload["@odata.count"], 10) || 0;
+}
+
+async function syncEntra(state) {
+  const config = state.settings.opsHubSystemDirectoryConfig || {};
+  const token = await fetchEntraToken(config);
+  const [organization, accountCount, groupCount, applicationCount, deviceCount] = await Promise.all([
+    fetchGraphJson(token.access_token, "organization?$select=displayName,verifiedDomains"),
+    fetchGraphCount(token.access_token, "users"),
+    fetchGraphCount(token.access_token, "groups"),
+    fetchGraphCount(token.access_token, "applications"),
+    fetchGraphCount(token.access_token, "devices"),
+  ]);
+  const org = organization.value?.[0] || {};
+  const runtime = {
+    ...(state.settings.opsHubSystemDirectoryRuntime || {}),
+    entra: {
+      connectionStatus: "connected",
+      accountCount,
+      groupCount,
+      applicationCount,
+      deviceCount,
+      syncedAt: new Date().toISOString(),
+      accountName: org.displayName || config.entra?.tenantName || "",
+      accountUsername: "Application permission",
+      error: "",
+    },
+  };
+  state.settings.opsHubSystemDirectoryRuntime = runtime;
+  writeState(state);
 }
 
 async function handleApi(req, res) {
@@ -230,9 +344,21 @@ async function handleApi(req, res) {
         json(res, 400, { error: "지원하지 않는 설정 키입니다." });
         return;
       }
-      state.settings[String(key)] = value;
+      state.settings[String(key)] = String(key) === "opsHubSystemDirectoryConfig"
+        ? mergeSystemDirectoryConfig(state.settings.opsHubSystemDirectoryConfig, value)
+        : value;
       writeState(state);
       json(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/integrations/entra/sync") {
+      if (!authenticated) {
+        json(res, 401, { error: "Settings 인증이 필요합니다." });
+        return;
+      }
+      await syncEntra(state);
+      json(res, 200, settingsPayload(readState(), true));
       return;
     }
 

@@ -12,7 +12,7 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 웹 포털
 - 날씨, 공지 채널, 점심 메뉴, 회의실 현황을 보여주는 대시보드
 - 하단 `Ops Portfolio` 톱니바퀴 버튼으로 진입하는 Settings
 - Settings에서 메뉴 표시 여부, 대시보드 값, 연동 정보를 관리하는 서버 저장 설정
-- Microsoft Entra ID OAuth 로그인과 Microsoft Graph 사용자/그룹 수 동기화
+- Microsoft Entra ID Client Credentials와 Microsoft Graph 사용자/그룹 수 동기화
 - 최초 Settings 진입 비밀번호 생성, 이후 비밀번호 검증과 변경
 - Slack, Google Workspace, Microsoft Entra ID 연동 정보 관리 화면
 - Lucide 아이콘과 반응형 레이아웃
@@ -92,22 +92,23 @@ Settings는 사이드바 하단 `Ops Portfolio` 영역의 톱니바퀴 버튼에
 Settings에서 제공하는 관리 화면:
 
 - `Show Menu`: 사이드바에 표시할 메뉴를 선택합니다.
-- `Integration Settings`: Slack, Google Workspace 표시값과 Microsoft Entra ID OAuth/Graph 동기화를 관리합니다.
+- `Integration Settings`: Slack, Google Workspace 표시값과 Microsoft Entra ID Graph 동기화를 관리합니다.
 - `Security Settings`: Settings 진입 비밀번호를 변경하거나 다시 잠급니다.
 
-비밀번호 원문은 저장하지 않습니다. 서버는 PBKDF2-SHA-256 해시와 salt만 Docker volume에 저장하고, 브라우저에는 HttpOnly 세션 쿠키만 내려줍니다. Entra OAuth access token은 Microsoft MSAL 정책에 따라 브라우저 `sessionStorage`에만 보관합니다.
+비밀번호 원문은 저장하지 않습니다. 서버는 PBKDF2-SHA-256 해시와 salt만 Docker volume에 저장하고, 브라우저에는 HttpOnly 세션 쿠키만 내려줍니다. Entra client secret은 서버 저장소에만 보관하고 API 응답과 브라우저 저장소에는 노출하지 않습니다.
 
-### Microsoft Entra ID OAuth
+### Microsoft Entra ID Client Credentials
 
-Entra ID 연동은 정적 SPA 구조에 맞춰 MSAL Browser의 Authorization Code + PKCE 흐름을 사용합니다. Azure Portal의 App registration에서 플랫폼을 `Single-page application`으로 등록하고, Settings 화면에 표시되는 Redirect URI를 추가해야 합니다.
+Entra ID 연동은 서버의 Client Credentials 흐름을 사용합니다. Azure Portal의 App registration에서 client secret을 만들고 Microsoft Graph Application permissions에 관리자 동의를 부여해야 합니다.
 
 필수 설정:
 
 - Application client ID
-- Tenant ID 또는 `organizations`
-- Graph scopes: 기본값은 `User.Read Directory.Read.All Application.Read.All Device.Read.All`
+- Tenant ID
+- Client secret
+- Graph scopes: 기본값은 `https://graph.microsoft.com/.default`
 
-`Directory.Read.All`, `Application.Read.All`, `Device.Read.All`은 사용자/그룹/애플리케이션/디바이스 수 조회에 필요하며 tenant 관리자 동의가 필요할 수 있습니다. 토큰 캐시는 브라우저 `sessionStorage`에 보관하고, 동기화 결과는 서버 저장소에 기록합니다.
+`Directory.Read.All`, `Application.Read.All`, `Device.Read.All` Application permissions는 사용자/그룹/애플리케이션/디바이스 수 조회에 필요하며 tenant 관리자 동의가 필요합니다. access token은 서버 메모리에서만 사용하고 저장하지 않으며, 동기화 결과는 서버 저장소에 기록합니다.
 
 ## Local Development
 
