@@ -32,6 +32,9 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 웹 포털
 | Secure PDF | Labs | PDF 보관 암호화, 복호화, 병합, 페이지 추출 |
 | Network Check | Labs | 다운로드, 업로드, 레이턴시 측정 |
 | Diff Expert | Labs | 텍스트 차이 비교와 변경 요약 |
+| JSON Formatter | Labs | JSON 검증, 포맷, 압축, key 정렬 |
+| Base64 Codec | Labs | Unicode 텍스트 Base64 인코딩/디코딩 |
+| UUID Generator | Labs | UUID v4 단일/일괄 생성 |
 
 ## Tech Stack
 

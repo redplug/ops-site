@@ -27,6 +27,9 @@ const labTools = [
   { key: "imagestudio", cat: "Media", name: "Image Studio", desc: "이미지 리사이즈, 크롭, 포맷 변환을 브라우저에서 처리합니다.", status: "Ready", icon: "image-plus" },
   { key: "pdf", cat: "Document", name: "Secure PDF", desc: "PDF 암호화 보관, 복호화, 병합, 페이지 추출을 로컬에서 처리합니다.", status: "Ready", icon: "file-lock-2" },
   { key: "diff", cat: "Developer", name: "Diff Expert", desc: "텍스트 차이 비교와 변경 요약을 위한 도구입니다.", status: "Ready", icon: "git-compare" },
+  { key: "json", cat: "Developer", name: "JSON Formatter", desc: "JSON 정렬, 검증, 압축을 브라우저에서 처리합니다.", status: "Ready", icon: "braces" },
+  { key: "base64", cat: "Developer", name: "Base64 Codec", desc: "텍스트를 Base64와 URL-safe Base64로 인코딩/디코딩합니다.", status: "Ready", icon: "binary" },
+  { key: "uuid", cat: "Developer", name: "UUID Generator", desc: "UUID v4를 단일 또는 일괄 생성합니다.", status: "Ready", icon: "fingerprint" },
   { key: "rename", cat: "Files", name: "File Renamer", desc: "파일명 일괄 변경 규칙을 테스트하는 도구입니다.", status: "Labs", icon: "files" },
   { key: "textcleaner", cat: "Text Utility", name: "Text Cleaner", desc: "공백, 줄바꿈, 특수문자를 정리하는 실제 구현 도구입니다.", status: "Ready", icon: "sparkles" },
   { key: "todo", cat: "Personal Ops", name: "Todo List", desc: "작업 목록과 체크리스트를 관리하는 도구입니다.", status: "Labs", icon: "list-checks" },
@@ -35,7 +38,7 @@ const labTools = [
   { key: "lunch", cat: "Dining", name: "Lunch Guide", desc: "잠실 근처 점심 후보와 랜덤 추천을 연결할 수 있습니다.", status: "Labs", icon: "map-pin" },
 ];
 
-const readyToolKeys = new Set(["directory", "signature", "onboarding", "netcheck", "imagestudio", "pdf", "diff", "textcleaner"]);
+const readyToolKeys = new Set(["directory", "signature", "onboarding", "netcheck", "imagestudio", "pdf", "diff", "json", "base64", "uuid", "textcleaner"]);
 const visibleTools = [...officialTools, ...labTools].filter((tool) => readyToolKeys.has(tool.key));
 
 const policyTools = policies.map((policy) => ({
@@ -2107,6 +2110,379 @@ function bindTextCleaner() {
   });
 }
 
+function renderJsonFormatter() {
+  viewTitle.textContent = "JSON FORMATTER";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view">
+      <div class="tool-panel-header">
+        <div>
+          <h3>JSON Formatter</h3>
+          <p>JSON을 검증하고 보기 좋게 정렬하거나 한 줄로 압축합니다. 민감한 데이터는 브라우저 안에서만 처리됩니다.</p>
+        </div>
+        <button class="secondary-button" type="button" data-open="home">홈으로</button>
+      </div>
+      <div class="tool-body">
+        <div class="utility-layout">
+          <div class="text-area-card">
+            <label for="jsonInput">JSON Input / Output</label>
+            <textarea class="code-textarea" id="jsonInput" spellcheck="false" placeholder='{"service":"ops-hub","enabled":true}'></textarea>
+          </div>
+          <aside class="control-card">
+            <h4>Format Options</h4>
+            <div class="field-list">
+              <label>
+                <span>Indent</span>
+                <select id="jsonIndent">
+                  <option value="2">2 spaces</option>
+                  <option value="4">4 spaces</option>
+                  <option value="tab">Tab</option>
+                </select>
+              </label>
+            </div>
+            <div class="option-list">
+              <label class="check-row"><input type="checkbox" id="jsonSortKeys"><span>객체 key 정렬</span></label>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-box"><strong id="jsonChars">0</strong><span>Characters</span></div>
+              <div class="stat-box"><strong id="jsonBytes">0 B</strong><span>Bytes</span></div>
+              <div class="stat-box"><strong id="jsonNodes">0</strong><span>Nodes</span></div>
+              <div class="stat-box"><strong id="jsonDepth">0</strong><span>Depth</span></div>
+            </div>
+            <div class="button-row">
+              <button class="primary-button" type="button" id="formatJsonButton">${icon("braces")} 포맷</button>
+              <button class="secondary-button" type="button" id="minifyJsonButton">압축</button>
+              <button class="secondary-button" type="button" id="copyJsonButton">${icon("copy")} 복사</button>
+              <button class="danger-button" type="button" id="clearJsonButton">비우기</button>
+            </div>
+            <div class="result-list" id="jsonResults">
+              ${resultRow("warn", "대기 중", "JSON을 입력하고 포맷 또는 압축을 실행하세요.")}
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  `;
+  bindJsonFormatter();
+  refreshIcons();
+}
+
+function sortJsonKeys(value) {
+  if (Array.isArray(value)) return value.map(sortJsonKeys);
+  if (!value || typeof value !== "object") return value;
+  return Object.keys(value).sort((a, b) => a.localeCompare(b, "en")).reduce((next, key) => {
+    next[key] = sortJsonKeys(value[key]);
+    return next;
+  }, {});
+}
+
+function analyzeJsonValue(value, depth = 1) {
+  if (!value || typeof value !== "object") return { nodes: 1, depth };
+  const children = Array.isArray(value) ? value : Object.values(value);
+  if (!children.length) return { nodes: 1, depth };
+  return children.reduce((summary, child) => {
+    const childSummary = analyzeJsonValue(child, depth + 1);
+    return {
+      nodes: summary.nodes + childSummary.nodes,
+      depth: Math.max(summary.depth, childSummary.depth),
+    };
+  }, { nodes: 1, depth });
+}
+
+function getJsonIndent() {
+  const value = document.querySelector("#jsonIndent").value;
+  return value === "tab" ? "\t" : Number(value);
+}
+
+function setJsonResult(status, title, detail, meta = "") {
+  const results = document.querySelector("#jsonResults");
+  if (results) results.innerHTML = resultRow(status, title, detail, meta);
+}
+
+function runJsonFormatter(minify = false) {
+  const input = document.querySelector("#jsonInput");
+  try {
+    const parsed = JSON.parse(input.value);
+    const output = document.querySelector("#jsonSortKeys").checked ? sortJsonKeys(parsed) : parsed;
+    input.value = JSON.stringify(output, null, minify ? 0 : getJsonIndent());
+    const summary = analyzeJsonValue(output);
+    document.querySelector("#jsonChars").textContent = String(input.value.length);
+    document.querySelector("#jsonBytes").textContent = formatBytes(new TextEncoder().encode(input.value).length);
+    document.querySelector("#jsonNodes").textContent = String(summary.nodes);
+    document.querySelector("#jsonDepth").textContent = String(summary.depth);
+    setJsonResult("ok", minify ? "압축 완료" : "포맷 완료", "유효한 JSON입니다.", `${summary.nodes} nodes · depth ${summary.depth}`);
+  } catch (error) {
+    setJsonResult("fail", "JSON 오류", error.message);
+  }
+}
+
+function bindJsonFormatter() {
+  const input = document.querySelector("#jsonInput");
+  input.value = JSON.stringify({
+    service: "ops-hub",
+    tools: ["json", "base64", "uuid"],
+    enabled: true,
+    owner: { team: "IT Operations", region: "KR" },
+  }, null, 2);
+  runJsonFormatter();
+
+  input.addEventListener("input", () => {
+    document.querySelector("#jsonChars").textContent = String(input.value.length);
+    document.querySelector("#jsonBytes").textContent = formatBytes(new TextEncoder().encode(input.value).length);
+  });
+  document.querySelector("#formatJsonButton").addEventListener("click", () => runJsonFormatter(false));
+  document.querySelector("#minifyJsonButton").addEventListener("click", () => runJsonFormatter(true));
+  document.querySelector("#copyJsonButton").addEventListener("click", (event) => copyTextFromValue(input.value, event.currentTarget, "복사"));
+  document.querySelector("#clearJsonButton").addEventListener("click", () => {
+    input.value = "";
+    document.querySelector("#jsonChars").textContent = "0";
+    document.querySelector("#jsonBytes").textContent = "0 B";
+    document.querySelector("#jsonNodes").textContent = "0";
+    document.querySelector("#jsonDepth").textContent = "0";
+    setJsonResult("warn", "비어 있음", "JSON을 입력하세요.");
+    input.focus();
+  });
+}
+
+function renderBase64Codec() {
+  viewTitle.textContent = "BASE64 CODEC";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view">
+      <div class="tool-panel-header">
+        <div>
+          <h3>Base64 Codec</h3>
+          <p>Unicode 텍스트를 Base64로 인코딩하거나 Base64 값을 다시 텍스트로 디코딩합니다.</p>
+        </div>
+        <button class="secondary-button" type="button" data-open="home">홈으로</button>
+      </div>
+      <div class="tool-body">
+        <div class="utility-layout">
+          <div class="codec-grid">
+            <div class="text-area-card">
+              <label for="base64Input">Input</label>
+              <textarea class="code-textarea" id="base64Input" spellcheck="false" placeholder="인코딩할 텍스트 또는 디코딩할 Base64를 입력하세요."></textarea>
+            </div>
+            <div class="text-area-card">
+              <label for="base64Output">Output</label>
+              <textarea class="code-textarea" id="base64Output" spellcheck="false" readonly></textarea>
+            </div>
+          </div>
+          <aside class="control-card">
+            <h4>Codec Options</h4>
+            <div class="option-list">
+              <label class="check-row"><input type="checkbox" id="base64UrlSafe"><span>URL-safe Base64 사용</span></label>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-box"><strong id="base64InputBytes">0 B</strong><span>Input</span></div>
+              <div class="stat-box"><strong id="base64OutputBytes">0 B</strong><span>Output</span></div>
+            </div>
+            <div class="button-row">
+              <button class="primary-button" type="button" id="encodeBase64Button">${icon("arrow-down-up")} 인코드</button>
+              <button class="secondary-button" type="button" id="decodeBase64Button">디코드</button>
+              <button class="secondary-button" type="button" id="swapBase64Button">${icon("repeat")} 교체</button>
+              <button class="secondary-button" type="button" id="copyBase64Button">${icon("copy")} 복사</button>
+              <button class="danger-button" type="button" id="clearBase64Button">비우기</button>
+            </div>
+            <div class="result-list" id="base64Results">
+              ${resultRow("warn", "대기 중", "텍스트를 입력하고 인코드 또는 디코드를 실행하세요.")}
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  `;
+  bindBase64Codec();
+  refreshIcons();
+}
+
+function textToBase64(value) {
+  return bytesToBase64(new TextEncoder().encode(value));
+}
+
+function base64ToText(value) {
+  return new TextDecoder().decode(base64ToBytes(value));
+}
+
+function toUrlSafeBase64(value) {
+  return value.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function fromUrlSafeBase64(value) {
+  const normalized = value.trim().replace(/-/g, "+").replace(/_/g, "/");
+  return normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+}
+
+function setBase64Result(status, title, detail, meta = "") {
+  const results = document.querySelector("#base64Results");
+  if (results) results.innerHTML = resultRow(status, title, detail, meta);
+}
+
+function updateBase64Stats() {
+  const input = document.querySelector("#base64Input")?.value || "";
+  const output = document.querySelector("#base64Output")?.value || "";
+  document.querySelector("#base64InputBytes").textContent = formatBytes(new TextEncoder().encode(input).length);
+  document.querySelector("#base64OutputBytes").textContent = formatBytes(new TextEncoder().encode(output).length);
+}
+
+function bindBase64Codec() {
+  const input = document.querySelector("#base64Input");
+  const output = document.querySelector("#base64Output");
+  const urlSafe = document.querySelector("#base64UrlSafe");
+  input.value = "Ops Hub 개발자 유틸리티";
+  updateBase64Stats();
+
+  input.addEventListener("input", updateBase64Stats);
+  output.addEventListener("input", updateBase64Stats);
+
+  document.querySelector("#encodeBase64Button").addEventListener("click", () => {
+    try {
+      output.value = urlSafe.checked ? toUrlSafeBase64(textToBase64(input.value)) : textToBase64(input.value);
+      updateBase64Stats();
+      setBase64Result("ok", "인코딩 완료", "텍스트를 Base64로 변환했습니다.");
+    } catch (error) {
+      setBase64Result("fail", "인코딩 실패", error.message);
+    }
+  });
+
+  document.querySelector("#decodeBase64Button").addEventListener("click", () => {
+    try {
+      const source = urlSafe.checked ? fromUrlSafeBase64(input.value) : input.value.trim();
+      output.value = base64ToText(source);
+      updateBase64Stats();
+      setBase64Result("ok", "디코딩 완료", "Base64를 텍스트로 변환했습니다.");
+    } catch {
+      setBase64Result("fail", "디코딩 실패", "유효한 Base64 값인지 확인하세요.");
+    }
+  });
+
+  document.querySelector("#swapBase64Button").addEventListener("click", () => {
+    input.value = output.value;
+    output.value = "";
+    updateBase64Stats();
+    input.focus();
+  });
+  document.querySelector("#copyBase64Button").addEventListener("click", (event) => copyTextFromValue(output.value, event.currentTarget, "복사"));
+  document.querySelector("#clearBase64Button").addEventListener("click", () => {
+    input.value = "";
+    output.value = "";
+    updateBase64Stats();
+    setBase64Result("warn", "비어 있음", "텍스트 또는 Base64 값을 입력하세요.");
+    input.focus();
+  });
+}
+
+function renderUuidGenerator() {
+  viewTitle.textContent = "UUID GENERATOR";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view">
+      <div class="tool-panel-header">
+        <div>
+          <h3>UUID Generator</h3>
+          <p>테스트 데이터, 요청 추적 ID, 샘플 설정에 사용할 UUID v4를 생성합니다.</p>
+        </div>
+        <button class="secondary-button" type="button" data-open="home">홈으로</button>
+      </div>
+      <div class="tool-body">
+        <div class="utility-layout">
+          <div class="text-area-card">
+            <label for="uuidOutput">Generated UUIDs</label>
+            <textarea class="code-textarea" id="uuidOutput" spellcheck="false" readonly></textarea>
+          </div>
+          <aside class="control-card">
+            <h4>Generate Options</h4>
+            <div class="field-list">
+              <label>
+                <span>Count</span>
+                <input id="uuidCount" type="number" min="1" max="100" value="10">
+              </label>
+              <label>
+                <span>Prefix</span>
+                <input id="uuidPrefix" type="text" placeholder="예: req_">
+              </label>
+            </div>
+            <div class="option-list">
+              <label class="check-row"><input type="checkbox" id="uuidUppercase"><span>대문자로 출력</span></label>
+              <label class="check-row"><input type="checkbox" id="uuidBraces"><span>{ }로 감싸기</span></label>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-box"><strong id="uuidGeneratedCount">0</strong><span>Generated</span></div>
+              <div class="stat-box"><strong>v4</strong><span>Version</span></div>
+            </div>
+            <div class="button-row">
+              <button class="primary-button" type="button" id="generateUuidButton">${icon("fingerprint")} 생성</button>
+              <button class="secondary-button" type="button" id="copyUuidButton">${icon("copy")} 복사</button>
+              <button class="secondary-button" type="button" id="downloadUuidButton">${icon("download")} 저장</button>
+              <button class="danger-button" type="button" id="clearUuidButton">비우기</button>
+            </div>
+            <div class="result-list" id="uuidResults">
+              ${resultRow("warn", "대기 중", "생성 버튼을 눌러 UUID를 만드세요.")}
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  `;
+  bindUuidGenerator();
+  refreshIcons();
+}
+
+function createUuidV4() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  if (window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    bytes.forEach((_, index) => { bytes[index] = Math.floor(Math.random() * 256); });
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+}
+
+function generateUuidList() {
+  const count = Math.min(100, Math.max(1, Number(document.querySelector("#uuidCount").value) || 1));
+  const prefix = document.querySelector("#uuidPrefix").value;
+  const uppercase = document.querySelector("#uuidUppercase").checked;
+  const braces = document.querySelector("#uuidBraces").checked;
+  return Array.from({ length: count }, () => {
+    let value = createUuidV4();
+    if (uppercase) value = value.toUpperCase();
+    if (braces) value = `{${value}}`;
+    return `${prefix}${value}`;
+  });
+}
+
+function setUuidResult(status, title, detail, meta = "") {
+  const results = document.querySelector("#uuidResults");
+  if (results) results.innerHTML = resultRow(status, title, detail, meta);
+}
+
+function bindUuidGenerator() {
+  const output = document.querySelector("#uuidOutput");
+  const generate = () => {
+    const values = generateUuidList();
+    output.value = values.join("\n");
+    document.querySelector("#uuidGeneratedCount").textContent = String(values.length);
+    setUuidResult("ok", "생성 완료", `${values.length}개 UUID를 만들었습니다.`);
+  };
+  document.querySelector("#generateUuidButton").addEventListener("click", generate);
+  document.querySelector("#copyUuidButton").addEventListener("click", (event) => copyTextFromValue(output.value, event.currentTarget, "복사"));
+  document.querySelector("#downloadUuidButton").addEventListener("click", () => {
+    if (!output.value) return setUuidResult("warn", "저장할 값 없음", "먼저 UUID를 생성하세요.");
+    downloadTextFile("uuids.txt", output.value, "text/plain");
+    setUuidResult("ok", "저장 완료", "uuids.txt 파일을 다운로드했습니다.");
+  });
+  document.querySelector("#clearUuidButton").addEventListener("click", () => {
+    output.value = "";
+    document.querySelector("#uuidGeneratedCount").textContent = "0";
+    setUuidResult("warn", "비어 있음", "생성 버튼을 눌러 UUID를 만드세요.");
+  });
+  generate();
+}
+
 function renderDiffExpert() {
   viewTitle.textContent = "DIFF EXPERT";
   content.className = "content custom-scrollbar";
@@ -3022,6 +3398,26 @@ function downloadBlob(filename, blob) {
 
 function downloadTextFile(filename, text, type = "text/plain") {
   downloadBlob(filename, new Blob([text], { type }));
+}
+
+async function copyTextFromValue(value, button, fallbackLabel = "복사") {
+  try {
+    await navigator.clipboard.writeText(value);
+    button.textContent = "복사됨";
+    setTimeout(() => {
+      button.innerHTML = `${icon("copy")} ${fallbackLabel}`;
+      refreshIcons();
+    }, 1100);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
 }
 
 function normalizePdfName(name, fallback) {
@@ -4294,6 +4690,21 @@ function openRoute(route) {
 
   if (route === "diff") {
     renderDiffExpert();
+    return;
+  }
+
+  if (route === "json") {
+    renderJsonFormatter();
+    return;
+  }
+
+  if (route === "base64") {
+    renderBase64Codec();
+    return;
+  }
+
+  if (route === "uuid") {
+    renderUuidGenerator();
     return;
   }
 
