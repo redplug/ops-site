@@ -78,6 +78,15 @@ jobs:
             set -e
             cd '$TARGET_PATH'
             tar -xzf ops-site-release.tgz
-            APP_PORT='$REMOTE_APP_PORT' docker compose -f compose.prod.yml up -d --build --remove-orphans
-            docker image prune -f
+            if APP_PORT='$REMOTE_APP_PORT' docker compose -f compose.prod.yml up -d --build --remove-orphans; then
+              docker image prune -f
+            else
+              echo 'Docker rebuild failed; updating existing ops-site container files and restarting.'
+              docker ps -a --format '{{.Names}}' | grep -qx ops-site
+              docker cp index.html ops-site:/app/index.html
+              docker cp styles.css ops-site:/app/styles.css
+              docker cp app.js ops-site:/app/app.js
+              docker cp server.js ops-site:/app/server.js
+              docker restart ops-site
+            fi
           "
