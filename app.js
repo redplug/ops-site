@@ -30,6 +30,9 @@ const labTools = [
   { key: "json", cat: "Developer", name: "JSON Formatter", desc: "JSON 정렬, 검증, 압축을 브라우저에서 처리합니다.", status: "Ready", icon: "braces" },
   { key: "base64", cat: "Developer", name: "Base64 Codec", desc: "텍스트를 Base64와 URL-safe Base64로 인코딩/디코딩합니다.", status: "Ready", icon: "binary" },
   { key: "uuid", cat: "Developer", name: "UUID Generator", desc: "UUID v4를 단일 또는 일괄 생성합니다.", status: "Ready", icon: "fingerprint" },
+  { key: "urlcodec", cat: "Developer", name: "URL Codec", desc: "URL, 쿼리 문자열, URI 컴포넌트를 인코딩/디코딩합니다.", status: "Ready", icon: "link" },
+  { key: "jwt", cat: "Developer", name: "JWT Decoder", desc: "JWT header와 payload를 검증 없이 로컬에서 디코딩합니다.", status: "Ready", icon: "key-round" },
+  { key: "hash", cat: "Developer", name: "Hash Generator", desc: "텍스트의 SHA 해시를 생성하고 비교합니다.", status: "Ready", icon: "hash" },
   { key: "rename", cat: "Files", name: "File Renamer", desc: "파일명 일괄 변경 규칙을 테스트하는 도구입니다.", status: "Labs", icon: "files" },
   { key: "textcleaner", cat: "Text Utility", name: "Text Cleaner", desc: "공백, 줄바꿈, 특수문자를 정리하는 실제 구현 도구입니다.", status: "Ready", icon: "sparkles" },
   { key: "todo", cat: "Personal Ops", name: "Todo List", desc: "작업 목록과 체크리스트를 관리하는 도구입니다.", status: "Labs", icon: "list-checks" },
@@ -38,7 +41,7 @@ const labTools = [
   { key: "lunch", cat: "Dining", name: "Lunch Guide", desc: "잠실 근처 점심 후보와 랜덤 추천을 연결할 수 있습니다.", status: "Labs", icon: "map-pin" },
 ];
 
-const readyToolKeys = new Set(["directory", "signature", "onboarding", "netcheck", "imagestudio", "pdf", "diff", "json", "base64", "uuid", "textcleaner"]);
+const readyToolKeys = new Set(["directory", "signature", "onboarding", "netcheck", "imagestudio", "pdf", "diff", "json", "base64", "uuid", "urlcodec", "jwt", "hash", "textcleaner"]);
 const visibleTools = [...officialTools, ...labTools].filter((tool) => readyToolKeys.has(tool.key));
 
 const policyTools = policies.map((policy) => ({
@@ -2483,6 +2486,354 @@ function bindUuidGenerator() {
   generate();
 }
 
+function renderUrlCodec() {
+  viewTitle.textContent = "URL CODEC";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view">
+      <div class="tool-panel-header">
+        <div>
+          <h3>URL Codec</h3>
+          <p>URL 전체 또는 URI 컴포넌트를 인코딩/디코딩하고 쿼리 파라미터를 빠르게 확인합니다.</p>
+        </div>
+        <button class="secondary-button" type="button" data-open="home">홈으로</button>
+      </div>
+      <div class="tool-body">
+        <div class="utility-layout">
+          <div class="codec-grid">
+            <div class="text-area-card">
+              <label for="urlCodecInput">Input</label>
+              <textarea class="code-textarea" id="urlCodecInput" spellcheck="false" placeholder="URL 또는 텍스트를 입력하세요."></textarea>
+            </div>
+            <div class="text-area-card">
+              <label for="urlCodecOutput">Output</label>
+              <textarea class="code-textarea" id="urlCodecOutput" spellcheck="false" readonly></textarea>
+            </div>
+          </div>
+          <aside class="control-card">
+            <h4>Codec Options</h4>
+            <div class="field-list">
+              <label>
+                <span>Mode</span>
+                <select id="urlCodecMode">
+                  <option value="component">URI Component</option>
+                  <option value="full">Full URI</option>
+                </select>
+              </label>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-box"><strong id="urlParamCount">0</strong><span>Params</span></div>
+              <div class="stat-box"><strong id="urlOutputChars">0</strong><span>Output Chars</span></div>
+            </div>
+            <div class="button-row">
+              <button class="primary-button" type="button" id="encodeUrlButton">${icon("link")} 인코드</button>
+              <button class="secondary-button" type="button" id="decodeUrlButton">디코드</button>
+              <button class="secondary-button" type="button" id="parseUrlButton">쿼리 보기</button>
+              <button class="secondary-button" type="button" id="copyUrlButton">${icon("copy")} 복사</button>
+              <button class="danger-button" type="button" id="clearUrlButton">비우기</button>
+            </div>
+            <div class="result-list" id="urlCodecResults">
+              ${resultRow("warn", "대기 중", "URL 또는 텍스트를 입력하세요.")}
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  `;
+  bindUrlCodec();
+  refreshIcons();
+}
+
+function setUrlCodecResult(status, title, detail, meta = "") {
+  const results = document.querySelector("#urlCodecResults");
+  if (results) results.innerHTML = resultRow(status, title, detail, meta);
+}
+
+function updateUrlCodecStats(paramCount = 0) {
+  const output = document.querySelector("#urlCodecOutput")?.value || "";
+  document.querySelector("#urlParamCount").textContent = String(paramCount);
+  document.querySelector("#urlOutputChars").textContent = String(output.length);
+}
+
+function parseUrlParameters(value) {
+  const parsed = new URL(value, window.location.origin);
+  return Array.from(parsed.searchParams.entries()).map(([key, item]) => `${key}: ${item}`);
+}
+
+function bindUrlCodec() {
+  const input = document.querySelector("#urlCodecInput");
+  const output = document.querySelector("#urlCodecOutput");
+  const mode = document.querySelector("#urlCodecMode");
+  input.value = "https://ops.example.com/search?q=IT 운영&team=infra&enabled=true";
+  updateUrlCodecStats();
+
+  document.querySelector("#encodeUrlButton").addEventListener("click", () => {
+    try {
+      output.value = mode.value === "full" ? encodeURI(input.value) : encodeURIComponent(input.value);
+      updateUrlCodecStats();
+      setUrlCodecResult("ok", "인코딩 완료", "입력 값을 URL-safe 문자열로 변환했습니다.");
+    } catch (error) {
+      setUrlCodecResult("fail", "인코딩 실패", error.message);
+    }
+  });
+
+  document.querySelector("#decodeUrlButton").addEventListener("click", () => {
+    try {
+      output.value = mode.value === "full" ? decodeURI(input.value) : decodeURIComponent(input.value.replace(/\+/g, " "));
+      updateUrlCodecStats();
+      setUrlCodecResult("ok", "디코딩 완료", "URL 인코딩 값을 사람이 읽기 쉬운 문자열로 변환했습니다.");
+    } catch (error) {
+      setUrlCodecResult("fail", "디코딩 실패", error.message);
+    }
+  });
+
+  document.querySelector("#parseUrlButton").addEventListener("click", () => {
+    try {
+      const rows = parseUrlParameters(input.value);
+      output.value = rows.length ? rows.join("\n") : "쿼리 파라미터가 없습니다.";
+      updateUrlCodecStats(rows.length);
+      setUrlCodecResult("ok", "파싱 완료", `${rows.length}개 쿼리 파라미터를 찾았습니다.`);
+    } catch {
+      setUrlCodecResult("fail", "파싱 실패", "유효한 URL인지 확인하세요.");
+    }
+  });
+
+  input.addEventListener("input", () => updateUrlCodecStats());
+  document.querySelector("#copyUrlButton").addEventListener("click", (event) => copyTextFromValue(output.value, event.currentTarget, "복사"));
+  document.querySelector("#clearUrlButton").addEventListener("click", () => {
+    input.value = "";
+    output.value = "";
+    updateUrlCodecStats();
+    setUrlCodecResult("warn", "비어 있음", "URL 또는 텍스트를 입력하세요.");
+    input.focus();
+  });
+}
+
+function renderJwtDecoder() {
+  viewTitle.textContent = "JWT DECODER";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view">
+      <div class="tool-panel-header">
+        <div>
+          <h3>JWT Decoder</h3>
+          <p>JWT의 header와 payload를 로컬에서 디코딩합니다. 서명 검증은 수행하지 않습니다.</p>
+        </div>
+        <button class="secondary-button" type="button" data-open="home">홈으로</button>
+      </div>
+      <div class="tool-body">
+        <div class="utility-layout">
+          <div class="codec-grid">
+            <div class="text-area-card">
+              <label for="jwtInput">JWT</label>
+              <textarea class="code-textarea" id="jwtInput" spellcheck="false" placeholder="eyJhbGciOi..."></textarea>
+            </div>
+            <div class="text-area-card">
+              <label for="jwtOutput">Decoded Header / Payload</label>
+              <textarea class="code-textarea" id="jwtOutput" spellcheck="false" readonly></textarea>
+            </div>
+          </div>
+          <aside class="control-card">
+            <h4>Token Summary</h4>
+            <div class="stats-grid">
+              <div class="stat-box"><strong id="jwtAlg">-</strong><span>Algorithm</span></div>
+              <div class="stat-box"><strong id="jwtTyp">-</strong><span>Type</span></div>
+              <div class="stat-box"><strong id="jwtExp">-</strong><span>Expires</span></div>
+              <div class="stat-box"><strong id="jwtParts">0</strong><span>Parts</span></div>
+            </div>
+            <div class="button-row">
+              <button class="primary-button" type="button" id="decodeJwtButton">${icon("key-round")} 디코드</button>
+              <button class="secondary-button" type="button" id="copyJwtButton">${icon("copy")} 복사</button>
+              <button class="danger-button" type="button" id="clearJwtButton">비우기</button>
+            </div>
+            <div class="result-list" id="jwtResults">
+              ${resultRow("warn", "대기 중", "JWT를 입력하고 디코드를 실행하세요.", "검증 없음")}
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  `;
+  bindJwtDecoder();
+  refreshIcons();
+}
+
+function decodeJwtPart(part) {
+  return JSON.parse(base64ToText(fromUrlSafeBase64(part)));
+}
+
+function formatJwtDate(value) {
+  if (!value) return "-";
+  const date = new Date(Number(value) * 1000);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toISOString().slice(0, 10);
+}
+
+function setJwtResult(status, title, detail, meta = "") {
+  const results = document.querySelector("#jwtResults");
+  if (results) results.innerHTML = resultRow(status, title, detail, meta);
+}
+
+function updateJwtSummary(header = {}, payload = {}, parts = 0) {
+  document.querySelector("#jwtAlg").textContent = header.alg || "-";
+  document.querySelector("#jwtTyp").textContent = header.typ || "-";
+  document.querySelector("#jwtExp").textContent = formatJwtDate(payload.exp);
+  document.querySelector("#jwtParts").textContent = String(parts);
+}
+
+function bindJwtDecoder() {
+  const input = document.querySelector("#jwtInput");
+  const output = document.querySelector("#jwtOutput");
+  input.value = [
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+    "eyJzdWIiOiJvcHMtdXNlciIsInRlYW0iOiJJVCBPcGVyYXRpb25zIiwiaWF0IjoxNzEwMDAwMDAwLCJleHAiOjE4OTM0NTYwMDB9",
+    "signature-placeholder",
+  ].join(".");
+
+  document.querySelector("#decodeJwtButton").addEventListener("click", () => {
+    try {
+      const parts = input.value.trim().split(".");
+      if (parts.length < 2) throw new Error("JWT는 header.payload.signature 형식이어야 합니다.");
+      const header = decodeJwtPart(parts[0]);
+      const payload = decodeJwtPart(parts[1]);
+      output.value = JSON.stringify({ header, payload }, null, 2);
+      updateJwtSummary(header, payload, parts.length);
+      const expired = payload.exp && Date.now() > Number(payload.exp) * 1000;
+      setJwtResult(expired ? "warn" : "ok", expired ? "디코딩 완료 · 만료됨" : "디코딩 완료", "서명 검증 없이 header와 payload만 해석했습니다.");
+    } catch (error) {
+      updateJwtSummary();
+      setJwtResult("fail", "디코딩 실패", error.message);
+    }
+  });
+
+  document.querySelector("#copyJwtButton").addEventListener("click", (event) => copyTextFromValue(output.value, event.currentTarget, "복사"));
+  document.querySelector("#clearJwtButton").addEventListener("click", () => {
+    input.value = "";
+    output.value = "";
+    updateJwtSummary();
+    setJwtResult("warn", "비어 있음", "JWT를 입력하고 디코드를 실행하세요.", "검증 없음");
+    input.focus();
+  });
+  document.querySelector("#decodeJwtButton").click();
+}
+
+function renderHashGenerator() {
+  viewTitle.textContent = "HASH GENERATOR";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view">
+      <div class="tool-panel-header">
+        <div>
+          <h3>Hash Generator</h3>
+          <p>텍스트의 SHA 해시를 생성하고 기대값과 일치하는지 비교합니다.</p>
+        </div>
+        <button class="secondary-button" type="button" data-open="home">홈으로</button>
+      </div>
+      <div class="tool-body">
+        <div class="utility-layout">
+          <div class="codec-grid">
+            <div class="text-area-card">
+              <label for="hashInput">Input</label>
+              <textarea class="code-textarea" id="hashInput" spellcheck="false" placeholder="해시를 생성할 텍스트를 입력하세요."></textarea>
+            </div>
+            <div class="text-area-card">
+              <label for="hashOutput">Hash Output</label>
+              <textarea class="code-textarea" id="hashOutput" spellcheck="false" readonly></textarea>
+            </div>
+          </div>
+          <aside class="control-card">
+            <h4>Hash Options</h4>
+            <div class="field-list">
+              <label>
+                <span>Algorithm</span>
+                <select id="hashAlgorithm">
+                  <option value="SHA-256">SHA-256</option>
+                  <option value="SHA-1">SHA-1</option>
+                  <option value="SHA-384">SHA-384</option>
+                  <option value="SHA-512">SHA-512</option>
+                </select>
+              </label>
+              <label>
+                <span>Compare With</span>
+                <input id="hashCompare" type="text" placeholder="기대 해시값">
+              </label>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-box"><strong id="hashInputBytes">0 B</strong><span>Input</span></div>
+              <div class="stat-box"><strong id="hashMatch">-</strong><span>Match</span></div>
+            </div>
+            <div class="button-row">
+              <button class="primary-button" type="button" id="generateHashButton">${icon("hash")} 생성</button>
+              <button class="secondary-button" type="button" id="copyHashButton">${icon("copy")} 복사</button>
+              <button class="danger-button" type="button" id="clearHashButton">비우기</button>
+            </div>
+            <div class="result-list" id="hashResults">
+              ${resultRow("warn", "대기 중", "텍스트를 입력하고 해시를 생성하세요.")}
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  `;
+  bindHashGenerator();
+  refreshIcons();
+}
+
+function bufferToHex(buffer) {
+  return Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function setHashResult(status, title, detail, meta = "") {
+  const results = document.querySelector("#hashResults");
+  if (results) results.innerHTML = resultRow(status, title, detail, meta);
+}
+
+function updateHashStats() {
+  const input = document.querySelector("#hashInput")?.value || "";
+  document.querySelector("#hashInputBytes").textContent = formatBytes(new TextEncoder().encode(input).length);
+}
+
+async function generateHashValue() {
+  const input = document.querySelector("#hashInput");
+  const output = document.querySelector("#hashOutput");
+  const algorithm = document.querySelector("#hashAlgorithm").value;
+  const compare = document.querySelector("#hashCompare").value.trim().toLowerCase();
+  try {
+    if (!window.crypto?.subtle) throw new Error("이 브라우저에서 WebCrypto를 사용할 수 없습니다.");
+    const digest = await crypto.subtle.digest(algorithm, new TextEncoder().encode(input.value));
+    output.value = bufferToHex(digest);
+    const matched = compare ? output.value.toLowerCase() === compare : null;
+    document.querySelector("#hashMatch").textContent = matched === null ? "-" : matched ? "YES" : "NO";
+    setHashResult(matched === false ? "fail" : "ok", "해시 생성 완료", `${algorithm} 해시를 생성했습니다.`, `${output.value.length} hex chars`);
+  } catch (error) {
+    setHashResult("fail", "해시 생성 실패", error.message);
+  }
+}
+
+function bindHashGenerator() {
+  const input = document.querySelector("#hashInput");
+  input.value = "Ops Hub 개발자 유틸리티";
+  updateHashStats();
+  input.addEventListener("input", updateHashStats);
+  document.querySelector("#generateHashButton").addEventListener("click", generateHashValue);
+  document.querySelector("#hashCompare").addEventListener("input", () => {
+    const output = document.querySelector("#hashOutput").value.trim().toLowerCase();
+    const compare = document.querySelector("#hashCompare").value.trim().toLowerCase();
+    document.querySelector("#hashMatch").textContent = output && compare ? (output === compare ? "YES" : "NO") : "-";
+  });
+  document.querySelector("#copyHashButton").addEventListener("click", (event) => copyTextFromValue(document.querySelector("#hashOutput").value, event.currentTarget, "복사"));
+  document.querySelector("#clearHashButton").addEventListener("click", () => {
+    input.value = "";
+    document.querySelector("#hashOutput").value = "";
+    document.querySelector("#hashCompare").value = "";
+    document.querySelector("#hashMatch").textContent = "-";
+    updateHashStats();
+    setHashResult("warn", "비어 있음", "텍스트를 입력하고 해시를 생성하세요.");
+    input.focus();
+  });
+  generateHashValue();
+}
+
 function renderDiffExpert() {
   viewTitle.textContent = "DIFF EXPERT";
   content.className = "content custom-scrollbar";
@@ -4705,6 +5056,21 @@ function openRoute(route) {
 
   if (route === "uuid") {
     renderUuidGenerator();
+    return;
+  }
+
+  if (route === "urlcodec") {
+    renderUrlCodec();
+    return;
+  }
+
+  if (route === "jwt") {
+    renderJwtDecoder();
+    return;
+  }
+
+  if (route === "hash") {
+    renderHashGenerator();
     return;
   }
 

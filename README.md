@@ -35,6 +35,9 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 웹 포털
 | JSON Formatter | Labs | JSON 검증, 포맷, 압축, key 정렬 |
 | Base64 Codec | Labs | Unicode 텍스트 Base64 인코딩/디코딩 |
 | UUID Generator | Labs | UUID v4 단일/일괄 생성 |
+| URL Codec | Labs | URL/URI 컴포넌트 인코딩, 디코딩, 쿼리 파싱 |
+| JWT Decoder | Labs | JWT header/payload 로컬 디코딩 |
+| Hash Generator | Labs | SHA 해시 생성과 기대값 비교 |
 
 ## Tech Stack
 
