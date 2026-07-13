@@ -33,6 +33,9 @@ const labTools = [
   { key: "urlcodec", cat: "Developer", name: "URL Codec", desc: "URL, 쿼리 문자열, URI 컴포넌트를 인코딩/디코딩합니다.", status: "Ready", icon: "link" },
   { key: "jwt", cat: "Developer", name: "JWT Decoder", desc: "JWT header와 payload를 검증 없이 로컬에서 디코딩합니다.", status: "Ready", icon: "key-round" },
   { key: "hash", cat: "Developer", name: "Hash Generator", desc: "텍스트의 SHA 해시를 생성하고 비교합니다.", status: "Ready", icon: "hash" },
+  { key: "regex", cat: "Developer", name: "Regex Tester", desc: "정규식 패턴과 플래그를 실시간으로 테스트하고 매칭 결과를 확인합니다.", status: "Ready", icon: "scan-text" },
+  { key: "timestamp", cat: "Developer", name: "Timestamp Converter", desc: "Unix timestamp와 현지 날짜/시간을 서로 변환합니다.", status: "Ready", icon: "clock-3" },
+  { key: "cron", cat: "Developer", name: "Cron Parser", desc: "5-field cron 표현식을 해석하고 다음 실행 시각을 계산합니다.", status: "Ready", icon: "timer" },
   { key: "rename", cat: "Files", name: "File Renamer", desc: "파일명 일괄 변경 규칙을 테스트하는 도구입니다.", status: "Labs", icon: "files" },
   { key: "textcleaner", cat: "Text Utility", name: "Text Cleaner", desc: "공백, 줄바꿈, 특수문자를 정리하는 실제 구현 도구입니다.", status: "Ready", icon: "sparkles" },
   { key: "todo", cat: "Personal Ops", name: "Todo List", desc: "작업 목록과 체크리스트를 관리하는 도구입니다.", status: "Labs", icon: "list-checks" },
@@ -41,7 +44,7 @@ const labTools = [
   { key: "lunch", cat: "Dining", name: "Lunch Guide", desc: "잠실 근처 점심 후보와 랜덤 추천을 연결할 수 있습니다.", status: "Labs", icon: "map-pin" },
 ];
 
-const readyToolKeys = new Set(["directory", "signature", "onboarding", "netcheck", "imagestudio", "pdf", "diff", "json", "base64", "uuid", "urlcodec", "jwt", "hash", "textcleaner"]);
+const readyToolKeys = new Set(["directory", "signature", "onboarding", "netcheck", "imagestudio", "pdf", "diff", "json", "base64", "uuid", "urlcodec", "jwt", "hash", "regex", "timestamp", "cron", "textcleaner"]);
 const visibleTools = [...officialTools, ...labTools].filter((tool) => readyToolKeys.has(tool.key));
 
 const policyTools = policies.map((policy) => ({
@@ -2834,6 +2837,75 @@ function bindHashGenerator() {
   generateHashValue();
 }
 
+function renderRegexTester() {
+  viewTitle.textContent = "REGEX TESTER";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view">
+      <div class="tool-panel-header"><div><h3>Regex Tester</h3><p>정규식은 브라우저 안에서만 실행됩니다. 매칭 위치와 캡처 그룹을 함께 확인하세요.</p></div><button class="secondary-button" type="button" data-open="home">홈으로</button></div>
+      <div class="tool-body utility-layout">
+        <div class="text-area-card"><div class="field-list"><label for="regexPattern">Pattern</label><input id="regexPattern" type="text" value="(?&lt;user&gt;[\\w.-]+)@([\\w.-]+\\.[A-Za-z]{2,})" spellcheck="false"><label for="regexFlags">Flags</label><input id="regexFlags" type="text" value="gi" maxlength="8" spellcheck="false"><label for="regexInput">Test String</label><textarea class="code-textarea" id="regexInput" rows="11" spellcheck="false">Contact ops@example.com or dev@example.org.</textarea></div><div class="button-row"><button class="primary-button" type="button" id="testRegexButton">${icon("scan-text")} 테스트</button><button class="secondary-button" type="button" id="sampleRegexButton">샘플</button><button class="secondary-button" type="button" id="clearRegexButton">비우기</button></div></div>
+        <aside class="tool-side-panel"><div class="stats-grid"><div class="stat-box"><strong id="regexMatchCount">0</strong><span>Matches</span></div><div class="stat-box"><strong id="regexGroupCount">0</strong><span>Groups</span></div></div><div class="result-list" id="regexResults"><div class="empty-state">${icon("scan-text")}<span>패턴을 입력하고 테스트하세요.</span></div></div></aside>
+      </div>
+    </section>`;
+  const pattern = document.querySelector("#regexPattern");
+  const flags = document.querySelector("#regexFlags");
+  const input = document.querySelector("#regexInput");
+  const results = document.querySelector("#regexResults");
+  const test = () => {
+    try {
+      const regex = new RegExp(pattern.value, flags.value);
+      const matches = [];
+      if (regex.global) { let match; while ((match = regex.exec(input.value)) && matches.length < 500) { matches.push(match); if (match[0] === "") regex.lastIndex += 1; } } else { const match = regex.exec(input.value); if (match) matches.push(match); }
+      document.querySelector("#regexMatchCount").textContent = String(matches.length);
+      document.querySelector("#regexGroupCount").textContent = matches[0] ? String(Math.max(0, matches[0].length - 1)) : "0";
+      results.innerHTML = matches.length ? matches.map((match, index) => `<div class="result-row ok"><strong>#${index + 1}</strong><div><b>${escapeHtml(match[0])}</b><small>index ${match.index} · groups: ${escapeHtml(match.slice(1).join(" | ") || "-")}</small></div></div>`).join("") : `<div class="empty-state">${icon("circle-x")}<span>매칭 결과가 없습니다.</span></div>`;
+    } catch (error) { document.querySelector("#regexMatchCount").textContent = "-"; results.innerHTML = `<div class="result-row fail"><strong>ERR</strong><div><b>정규식 오류</b><small>${escapeHtml(error.message)}</small></div></div>`; }
+    refreshIcons();
+  };
+  document.querySelector("#testRegexButton").addEventListener("click", test);
+  [pattern, flags, input].forEach((element) => element.addEventListener("input", test));
+  document.querySelector("#sampleRegexButton").addEventListener("click", () => { pattern.value = "(?<user>[\\w.-]+)@([\\w.-]+\\.[A-Za-z]{2,})"; flags.value = "gi"; input.value = "Contact ops@example.com or dev@example.org."; test(); });
+  document.querySelector("#clearRegexButton").addEventListener("click", () => { input.value = ""; test(); input.focus(); });
+  refreshIcons();
+  test();
+}
+
+function renderTimestampConverter() {
+  viewTitle.textContent = "TIMESTAMP CONVERTER";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view"><div class="tool-panel-header"><div><h3>Timestamp Converter</h3><p>입력한 timestamp는 초/밀리초를 자동 판별하며 브라우저의 현지 시간대 기준으로 표시합니다.</p></div><button class="secondary-button" type="button" data-open="home">홈으로</button></div>
+      <div class="tool-body codec-grid"><div class="text-area-card"><div class="field-list"><label for="timestampInput">Unix Timestamp</label><input id="timestampInput" type="text" inputmode="numeric" placeholder="예: 1719792000"><label for="timestampDate">Local Date &amp; Time</label><input id="timestampDate" type="datetime-local" step="1"></div><div class="button-row"><button class="primary-button" type="button" id="timestampToDateButton">${icon("arrow-right")} 날짜로 변환</button><button class="secondary-button" type="button" id="dateToTimestampButton">${icon("arrow-left")} timestamp로 변환</button><button class="secondary-button" type="button" id="nowTimestampButton">현재 시각</button></div></div><aside class="tool-side-panel"><div class="result-list" id="timestampResults"><div class="empty-state">${icon("clock-3")}<span>변환 결과가 여기에 표시됩니다.</span></div></div></aside></div>
+    </section>`;
+  const timestamp = document.querySelector("#timestampInput");
+  const date = document.querySelector("#timestampDate");
+  const results = document.querySelector("#timestampResults");
+  const show = (title, detail) => { results.innerHTML = `<div class="result-row ok"><strong>OK</strong><div><b>${escapeHtml(title)}</b><small>${escapeHtml(detail)}</small></div></div>`; refreshIcons(); };
+  document.querySelector("#timestampToDateButton").addEventListener("click", () => { const value = Number(timestamp.value.trim()); if (!Number.isFinite(value)) { show("변환 실패", "숫자 timestamp를 입력하세요."); return; } const milliseconds = Math.abs(value) < 1e11 ? value * 1000 : value; const converted = new Date(milliseconds); if (Number.isNaN(converted.getTime())) { show("변환 실패", "유효한 timestamp가 아닙니다."); return; } date.value = toDateTimeLocalValue(converted); show(converted.toLocaleString("ko-KR"), `${milliseconds} ms · ${Intl.DateTimeFormat().resolvedOptions().timeZone}`); });
+  document.querySelector("#dateToTimestampButton").addEventListener("click", () => { const value = date.value ? new Date(date.value).getTime() : NaN; if (!Number.isFinite(value)) { show("변환 실패", "날짜와 시간을 선택하세요."); return; } timestamp.value = String(Math.floor(value / 1000)); show(timestamp.value, `${value} ms · ${new Date(value).toISOString()}`); });
+  document.querySelector("#nowTimestampButton").addEventListener("click", () => { const now = new Date(); timestamp.value = String(Math.floor(now.getTime() / 1000)); date.value = toDateTimeLocalValue(now); show(now.toLocaleString("ko-KR"), `${timestamp.value} seconds`); });
+  refreshIcons();
+}
+
+function toDateTimeLocalValue(date) { const pad = (value) => String(value).padStart(2, "0"); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`; }
+
+function renderCronParser() {
+  viewTitle.textContent = "CRON PARSER";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view"><div class="tool-panel-header"><div><h3>Cron Parser</h3><p>표준 5-field cron 표현식을 해석합니다. 분, 시, 일, 월, 요일 순서이며 현재 브라우저 시간 기준입니다.</p></div><button class="secondary-button" type="button" data-open="home">홈으로</button></div><div class="tool-body utility-layout"><div class="text-area-card"><div class="field-list"><label for="cronInput">Cron Expression</label><input id="cronInput" type="text" value="*/15 9-18 * * 1-5" spellcheck="false"><div class="mini-box"><strong>분　시　일　월　요일</strong><span>예: 매주 평일 업무 시간에 15분 간격</span></div></div><div class="button-row"><button class="primary-button" type="button" id="parseCronButton">${icon("timer")} 해석</button><button class="secondary-button" type="button" id="sampleCronButton">샘플</button></div></div><aside class="tool-side-panel"><div class="result-list" id="cronResults"><div class="empty-state">${icon("timer")}<span>cron 표현식을 입력하세요.</span></div></div></aside></div></section>`;
+  const input = document.querySelector("#cronInput");
+  const results = document.querySelector("#cronResults");
+  const parseField = (field, min, max) => { const values = new Set(); field.split(",").forEach((part) => { const [rangePart, stepText] = part.split("/"); const step = stepText ? Number(stepText) : 1; if (!Number.isInteger(step) || step < 1) throw new Error("step은 1 이상의 정수여야 합니다."); const range = rangePart === "*" ? [min, max] : rangePart.split("-").map(Number); if (range.some((value) => !Number.isInteger(value)) || range.length > 2 || range[0] < min || range[range.length - 1] > max || (range.length === 2 && range[0] > range[1])) throw new Error(`허용 범위: ${min}-${max}`); for (let value = range[0]; value <= (range[1] ?? range[0]); value += step) values.add(value); }); return values; };
+  const parse = () => { try { const fields = input.value.trim().split(/\\s+/); if (fields.length !== 5) throw new Error("5개의 필드가 필요합니다."); const sets = [parseField(fields[0], 0, 59), parseField(fields[1], 0, 23), parseField(fields[2], 1, 31), parseField(fields[3], 1, 12), parseField(fields[4], 0, 6)]; const labels = ["분", "시", "일", "월", "요일"]; const next = []; const cursor = new Date(); cursor.setSeconds(0, 0); for (let i = 0; i < 525600 && next.length < 5; i += 1) { cursor.setMinutes(cursor.getMinutes() + 1); if (sets[0].has(cursor.getMinutes()) && sets[1].has(cursor.getHours()) && sets[2].has(cursor.getDate()) && sets[3].has(cursor.getMonth() + 1) && sets[4].has(cursor.getDay())) next.push(cursor.toLocaleString("ko-KR")); } results.innerHTML = `<div class="result-row ok"><strong>OK</strong><div><b>유효한 cron 표현식</b><small>${fields.map((field, index) => `${labels[index]}: ${escapeHtml(field)}`).join(" · ")}</small></div></div>${next.map((time, index) => `<div class="result-row"><strong>#${index + 1}</strong><div><b>${escapeHtml(time)}</b><small>다음 실행 예정</small></div></div>`).join("")}`; } catch (error) { results.innerHTML = `<div class="result-row fail"><strong>ERR</strong><div><b>해석 실패</b><small>${escapeHtml(error.message)}</small></div></div>`; } refreshIcons(); };
+  document.querySelector("#parseCronButton").addEventListener("click", parse);
+  input.addEventListener("input", parse);
+  document.querySelector("#sampleCronButton").addEventListener("click", () => { input.value = "0 9 * * 1-5"; parse(); });
+  refreshIcons();
+  parse();
+}
+
 function renderDiffExpert() {
   viewTitle.textContent = "DIFF EXPERT";
   content.className = "content custom-scrollbar";
@@ -5071,6 +5143,21 @@ function openRoute(route) {
 
   if (route === "hash") {
     renderHashGenerator();
+    return;
+  }
+
+  if (route === "regex") {
+    renderRegexTester();
+    return;
+  }
+
+  if (route === "timestamp") {
+    renderTimestampConverter();
+    return;
+  }
+
+  if (route === "cron") {
+    renderCronParser();
     return;
   }
 

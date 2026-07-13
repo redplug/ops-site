@@ -38,6 +38,9 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 웹 포털
 | URL Codec | Labs | URL/URI 컴포넌트 인코딩, 디코딩, 쿼리 파싱 |
 | JWT Decoder | Labs | JWT header/payload 로컬 디코딩 |
 | Hash Generator | Labs | SHA 해시 생성과 기대값 비교 |
+| Regex Tester | Labs | 정규식 패턴, 플래그, 매칭 위치와 캡처 그룹 테스트 |
+| Timestamp Converter | Labs | Unix timestamp와 현지 날짜/시간 변환 |
+| Cron Parser | Labs | 5-field cron 검증과 다음 실행 시각 계산 |
 
 ## Tech Stack
 
