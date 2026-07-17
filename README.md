@@ -41,6 +41,9 @@ IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 웹 포털
 | Regex Tester | Labs | 정규식 패턴, 플래그, 매칭 위치와 캡처 그룹 테스트 |
 | Timestamp Converter | Labs | Unix timestamp와 현지 날짜/시간 변환 |
 | Cron Parser | Labs | 5-field cron 검증과 다음 실행 시각 계산 |
+| Password Generator | Labs | Web Crypto 기반 랜덤 비밀번호 생성과 강도 확인 |
+| Color Converter | Labs | HEX, RGB, HSL 색상 값 변환과 미리보기 |
+| Subnet Calculator | Labs | IPv4 CIDR 네트워크와 호스트 범위 계산 |
 
 ## Tech Stack
 

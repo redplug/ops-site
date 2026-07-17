@@ -36,6 +36,9 @@ const labTools = [
   { key: "regex", cat: "Developer", name: "Regex Tester", desc: "정규식 패턴과 플래그를 실시간으로 테스트하고 매칭 결과를 확인합니다.", status: "Ready", icon: "scan-text" },
   { key: "timestamp", cat: "Developer", name: "Timestamp Converter", desc: "Unix timestamp와 현지 날짜/시간을 서로 변환합니다.", status: "Ready", icon: "clock-3" },
   { key: "cron", cat: "Developer", name: "Cron Parser", desc: "5-field cron 표현식을 해석하고 다음 실행 시각을 계산합니다.", status: "Ready", icon: "timer" },
+  { key: "password", cat: "Security", name: "Password Generator", desc: "암호학적으로 안전한 랜덤 비밀번호를 생성하고 강도를 확인합니다.", status: "Ready", icon: "key-round" },
+  { key: "color", cat: "Design", name: "Color Converter", desc: "HEX, RGB, HSL 색상 값을 서로 변환하고 미리 봅니다.", status: "Ready", icon: "palette" },
+  { key: "subnet", cat: "Network", name: "Subnet Calculator", desc: "IPv4 CIDR의 네트워크, 브로드캐스트, 호스트 범위를 계산합니다.", status: "Ready", icon: "network" },
   { key: "rename", cat: "Files", name: "File Renamer", desc: "파일명 일괄 변경 규칙을 테스트하는 도구입니다.", status: "Labs", icon: "files" },
   { key: "textcleaner", cat: "Text Utility", name: "Text Cleaner", desc: "공백, 줄바꿈, 특수문자를 정리하는 실제 구현 도구입니다.", status: "Ready", icon: "sparkles" },
   { key: "todo", cat: "Personal Ops", name: "Todo List", desc: "작업 목록과 체크리스트를 관리하는 도구입니다.", status: "Labs", icon: "list-checks" },
@@ -44,7 +47,7 @@ const labTools = [
   { key: "lunch", cat: "Dining", name: "Lunch Guide", desc: "잠실 근처 점심 후보와 랜덤 추천을 연결할 수 있습니다.", status: "Labs", icon: "map-pin" },
 ];
 
-const readyToolKeys = new Set(["directory", "signature", "onboarding", "netcheck", "imagestudio", "pdf", "diff", "json", "base64", "uuid", "urlcodec", "jwt", "hash", "regex", "timestamp", "cron", "textcleaner"]);
+const readyToolKeys = new Set(["directory", "signature", "onboarding", "netcheck", "imagestudio", "pdf", "diff", "json", "base64", "uuid", "urlcodec", "jwt", "hash", "regex", "timestamp", "cron", "password", "color", "subnet", "textcleaner"]);
 const visibleTools = [...officialTools, ...labTools].filter((tool) => readyToolKeys.has(tool.key));
 
 const policyTools = policies.map((policy) => ({
@@ -2906,6 +2909,80 @@ function renderCronParser() {
   parse();
 }
 
+function renderPasswordGenerator() {
+  viewTitle.textContent = "PASSWORD GENERATOR";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view"><div class="tool-panel-header"><div><h3>Password Generator</h3><p>생성된 값은 서버로 전송하거나 저장하지 않습니다. Web Crypto API를 사용합니다.</p></div><button class="secondary-button" type="button" data-open="home">홈으로</button></div>
+      <div class="tool-body utility-layout"><div class="text-area-card"><div class="field-list"><label for="passwordLength">Length</label><input id="passwordLength" type="number" min="8" max="128" value="24"><label for="passwordOutput">Generated Password</label><input id="passwordOutput" class="code-textarea" type="text" readonly spellcheck="false"></div><div class="option-list"><label class="check-row"><input id="passwordUpper" type="checkbox" checked><span>대문자 포함 (A-Z)</span></label><label class="check-row"><input id="passwordLower" type="checkbox" checked><span>소문자 포함 (a-z)</span></label><label class="check-row"><input id="passwordNumbers" type="checkbox" checked><span>숫자 포함 (0-9)</span></label><label class="check-row"><input id="passwordSymbols" type="checkbox" checked><span>특수문자 포함 (!@#$)</span></label></div><div class="button-row"><button class="primary-button" type="button" id="generatePasswordButton">${icon("refresh-cw")} 생성</button><button class="secondary-button" type="button" id="copyPasswordButton">${icon("copy")} 복사</button></div></div><aside class="tool-side-panel"><div class="stats-grid"><div class="stat-box"><strong id="passwordStrength">-</strong><span>Strength</span></div><div class="stat-box"><strong id="passwordEntropy">0 bits</strong><span>Entropy</span></div></div><div class="result-list" id="passwordResults"><div class="empty-state">${icon("shield-check")}<span>옵션을 선택하고 비밀번호를 생성하세요.</span></div></div></aside></div>
+    </section>`;
+  const output = document.querySelector("#passwordOutput");
+  const generate = () => {
+    const pools = [];
+    if (document.querySelector("#passwordUpper").checked) pools.push("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    if (document.querySelector("#passwordLower").checked) pools.push("abcdefghijklmnopqrstuvwxyz");
+    if (document.querySelector("#passwordNumbers").checked) pools.push("0123456789");
+    if (document.querySelector("#passwordSymbols").checked) pools.push("!@#$%^&*()-_=+[]{};:,.?/");
+    const length = Math.min(128, Math.max(8, Number(document.querySelector("#passwordLength").value) || 24));
+    document.querySelector("#passwordLength").value = String(length);
+    if (!pools.length) { output.value = ""; document.querySelector("#passwordStrength").textContent = "-"; document.querySelector("#passwordEntropy").textContent = "0 bits"; return; }
+    const alphabet = pools.join("");
+    const random = new Uint32Array(length);
+    crypto.getRandomValues(random);
+    const chars = pools.map((pool, index) => pool[random[index] % pool.length]);
+    for (let index = pools.length; index < length; index += 1) chars.push(alphabet[random[index] % alphabet.length]);
+    for (let index = chars.length - 1; index > 0; index -= 1) { const swap = random[index % random.length] % (index + 1); [chars[index], chars[swap]] = [chars[swap], chars[index]]; }
+    output.value = chars.join("");
+    const entropy = Math.round(length * Math.log2(alphabet.length));
+    document.querySelector("#passwordEntropy").textContent = `${entropy} bits`;
+    document.querySelector("#passwordStrength").textContent = entropy >= 100 ? "Strong" : entropy >= 70 ? "Good" : "Fair";
+    document.querySelector("#passwordResults").innerHTML = `<div class="result-row ok"><strong>OK</strong><div><b>보안 비밀번호 생성 완료</b><small>${length}자 · 문자 종류 ${pools.length}개 · 로컬 처리</small></div></div>`;
+    refreshIcons();
+  };
+  document.querySelector("#generatePasswordButton").addEventListener("click", generate);
+  document.querySelector("#copyPasswordButton").addEventListener("click", (event) => copyTextFromValue(output.value, event.currentTarget, "복사"));
+  generate();
+  refreshIcons();
+}
+
+function renderColorConverter() {
+  viewTitle.textContent = "COLOR CONVERTER";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view"><div class="tool-panel-header"><div><h3>Color Converter</h3><p>HEX, RGB, HSL 값을 입력하면 브라우저에서 즉시 변환합니다.</p></div><button class="secondary-button" type="button" data-open="home">홈으로</button></div><div class="tool-body codec-grid"><div class="text-area-card"><div class="field-list"><label for="colorPicker">Color Preview</label><input id="colorPicker" type="color" value="#1769e0"><label for="colorHex">HEX</label><input id="colorHex" type="text" value="#1769e0" spellcheck="false"><label for="colorRgb">RGB</label><input id="colorRgb" type="text" value="rgb(23, 105, 224)" spellcheck="false"><label for="colorHsl">HSL</label><input id="colorHsl" type="text" value="hsl(216, 81%, 48%)" spellcheck="false"></div><button class="secondary-button" type="button" id="resetColorButton">기본 색상</button></div><aside class="tool-side-panel"><div id="colorSwatch" class="color-swatch"></div><div class="result-list" id="colorResults"><div class="empty-state">${icon("palette")}<span>색상 값을 입력하세요.</span></div></div></aside></div></section>`;
+  const picker = document.querySelector("#colorPicker");
+  const hex = document.querySelector("#colorHex");
+  const rgb = document.querySelector("#colorRgb");
+  const hsl = document.querySelector("#colorHsl");
+  const swatch = document.querySelector("#colorSwatch");
+  const results = document.querySelector("#colorResults");
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+  const rgbToHsl = (red, green, blue) => { red /= 255; green /= 255; blue /= 255; const max = Math.max(red, green, blue); const min = Math.min(red, green, blue); const light = (max + min) / 2; if (max === min) return [0, 0, light * 100]; const delta = max - min; const saturation = light > 0.5 ? delta / (2 - max - min) : delta / (max + min); let hue; if (max === red) hue = (green - blue) / delta + (green < blue ? 6 : 0); else if (max === green) hue = (blue - red) / delta + 2; else hue = (red - green) / delta + 4; return [hue * 60, saturation * 100, light * 100]; };
+  const update = (source = "hex") => { let red; let green; let blue; if (source === "picker") { const value = picker.value; red = parseInt(value.slice(1, 3), 16); green = parseInt(value.slice(3, 5), 16); blue = parseInt(value.slice(5, 7), 16); } else if (source === "rgb") { const match = rgb.value.match(/rgb\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)/i); if (!match) return; [red, green, blue] = match.slice(1).map(Number); } else if (source === "hsl") { const match = hsl.value.match(/hsl\\(\\s*([\\d.]+)\\s*,\\s*([\\d.]+)%\\s*,\\s*([\\d.]+)%\\s*\\)/i); if (!match) return; const hue = (Number(match[1]) % 360) / 360; const saturation = clamp(Number(match[2]) / 100, 0, 1); const light = clamp(Number(match[3]) / 100, 0, 1); const hueToRgb = (p, q, t) => { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; }; const q = light < 0.5 ? light * (1 + saturation) : light + saturation - light * saturation; const p = 2 * light - q; red = Math.round(hueToRgb(p, q, hue + 1 / 3) * 255); green = Math.round(hueToRgb(p, q, hue) * 255); blue = Math.round(hueToRgb(p, q, hue - 1 / 3) * 255); } else { const match = hex.value.trim().match(/^#?([0-9a-f]{6})$/i); if (!match) { results.innerHTML = `<div class="result-row fail"><strong>ERR</strong><div><b>HEX 형식 오류</b><small>#RRGGBB 형식으로 입력하세요.</small></div></div>`; refreshIcons(); return; } const clean = match[1]; red = parseInt(clean.slice(0, 2), 16); green = parseInt(clean.slice(2, 4), 16); blue = parseInt(clean.slice(4, 6), 16); } if ([red, green, blue].some((value) => !Number.isInteger(value) || value < 0 || value > 255)) return; const [hue, saturation, light] = rgbToHsl(red, green, blue); const normalized = `#${[red, green, blue].map((value) => value.toString(16).padStart(2, "0")).join("")}`; hex.value = normalized; picker.value = normalized; rgb.value = `rgb(${red}, ${green}, ${blue})`; hsl.value = `hsl(${Math.round(hue)}, ${Math.round(saturation)}%, ${Math.round(light)}%)`; swatch.style.background = normalized; results.innerHTML = `<div class="result-row ok"><strong>OK</strong><div><b>${normalized}</b><small>rgb(${red}, ${green}, ${blue}) · hsl(${Math.round(hue)}, ${Math.round(saturation)}%)</small></div></div>`; refreshIcons(); };
+  picker.addEventListener("input", () => update("picker"));
+  hex.addEventListener("change", () => update());
+  rgb.addEventListener("change", () => update("rgb"));
+  hsl.addEventListener("change", () => update("hsl"));
+  document.querySelector("#resetColorButton").addEventListener("click", () => { hex.value = "#1769e0"; update(); });
+  update();
+}
+
+function renderSubnetCalculator() {
+  viewTitle.textContent = "SUBNET CALCULATOR";
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view"><div class="tool-panel-header"><div><h3>Subnet Calculator</h3><p>IPv4 CIDR 표기에서 네트워크 범위와 사용 가능한 호스트 수를 계산합니다.</p></div><button class="secondary-button" type="button" data-open="home">홈으로</button></div><div class="tool-body utility-layout"><div class="text-area-card"><div class="field-list"><label for="subnetInput">IPv4 / CIDR</label><input id="subnetInput" type="text" value="192.168.10.25/24" spellcheck="false"></div><div class="button-row"><button class="primary-button" type="button" id="calculateSubnetButton">${icon("network")} 계산</button><button class="secondary-button" type="button" id="sampleSubnetButton">샘플</button></div></div><aside class="tool-side-panel"><div class="result-list" id="subnetResults"><div class="empty-state">${icon("network")}<span>IPv4 CIDR을 입력하세요.</span></div></div></aside></div></section>`;
+  const input = document.querySelector("#subnetInput");
+  const results = document.querySelector("#subnetResults");
+  const toNumber = (parts) => parts.reduce((value, part) => ((value << 8) | Number(part)) >>> 0, 0);
+  const toIp = (value) => [value >>> 24, (value >>> 16) & 255, (value >>> 8) & 255, value & 255].join(".");
+  const calculate = () => { try { const [address, prefixText] = input.value.trim().split("/"); const parts = address?.split("."); const prefix = Number(prefixText); if (!parts || parts.length !== 4 || parts.some((part) => !/^\\d+$/.test(part) || Number(part) > 255) || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) throw new Error("예: 192.168.10.25/24 형식을 사용하세요."); const ip = toNumber(parts); const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0; const network = ip & mask; const broadcast = (network | (~mask >>> 0)) >>> 0; const total = 2 ** (32 - prefix); const usable = prefix >= 31 ? total : Math.max(0, total - 2); const first = prefix >= 31 ? network : network + 1; const last = prefix >= 31 ? broadcast : broadcast - 1; results.innerHTML = `<div class="result-row ok"><strong>OK</strong><div><b>${toIp(network)}/${prefix}</b><small>유효한 IPv4 CIDR</small></div></div>${[["Subnet Mask", toIp(mask)], ["Network", toIp(network)], ["Broadcast", toIp(broadcast)], ["Host Range", `${toIp(first)} - ${toIp(last)}`], ["Usable Hosts", usable.toLocaleString("ko-KR")]].map(([label, value]) => `<div class="result-row"><strong>${escapeHtml(label)}</strong><div><b>${escapeHtml(value)}</b></div></div>`).join("")}`; } catch (error) { results.innerHTML = `<div class="result-row fail"><strong>ERR</strong><div><b>계산 실패</b><small>${escapeHtml(error.message)}</small></div></div>`; } refreshIcons(); };
+  document.querySelector("#calculateSubnetButton").addEventListener("click", calculate);
+  input.addEventListener("input", calculate);
+  document.querySelector("#sampleSubnetButton").addEventListener("click", () => { input.value = "10.20.30.40/20"; calculate(); });
+  calculate();
+}
+
 function renderDiffExpert() {
   viewTitle.textContent = "DIFF EXPERT";
   content.className = "content custom-scrollbar";
@@ -5158,6 +5235,21 @@ function openRoute(route) {
 
   if (route === "cron") {
     renderCronParser();
+    return;
+  }
+
+  if (route === "password") {
+    renderPasswordGenerator();
+    return;
+  }
+
+  if (route === "color") {
+    renderColorConverter();
+    return;
+  }
+
+  if (route === "subnet") {
+    renderSubnetCalculator();
     return;
   }
 
