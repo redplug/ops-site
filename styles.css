@@ -887,6 +887,56 @@ button {
   line-height: 1.6;
 }
 
+.policy-summary,
+.policy-contact {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.policy-steps {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.policy-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.policy-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fbff;
+  color: var(--blue);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.policy-link svg,
+.policy-contact svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.policy-contact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .onboarding-view .tool-body {
   display: grid;
   gap: 18px;

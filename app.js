@@ -4,11 +4,8 @@ const policies = cfg.policies || [];
 
 const officialTools = [
   { key: "policy", cat: "IT Policy & Guide", name: "Policy Navigator", desc: "사내 IT 표준 정책 가이드와 요청서 생성 흐름입니다.", status: "Official", icon: "shield-check" },
-  { key: "assets", cat: "Asset Ops", name: "IT Asset Management", desc: "장비 지급, 회수, 재고 상태를 관리하는 도구입니다.", status: "Official", icon: "package" },
   { key: "signature", cat: "Email Branding", name: "Signature Creator", desc: "공식 이메일 서명 생성과 적용 가이드를 제공합니다.", status: "Official", icon: "pen-tool" },
   { key: "directory", cat: "System Index", name: "System Directory", desc: "Slack, Google Workspace, Microsoft Entra ID 연동 현황을 안내합니다.", status: "Official", icon: "library" },
-  { key: "meeting", cat: "Facility Mgmt", name: "Meeting Room", desc: "회의실 예약 현황 확인과 간편 예약 지원 도구입니다.", status: "Official", icon: "calendar" },
-  { key: "cable", cat: "Network Mgmt", name: "Cable Seat Locator", desc: "선번호, 자리, 네트워크 장비 정보를 연결해 검색합니다.", status: "Official", icon: "scan-search" },
   { key: "onboarding", cat: "New Employee", name: "IT Onboarding Guide", desc: "신규 입사자 IT 환경 셋업 체크리스트입니다.", status: "Official", icon: "user-plus" },
 ];
 
@@ -29,23 +26,17 @@ const labTools = [
   { key: "password", cat: "Security", name: "Password Generator", desc: "암호학적으로 안전한 랜덤 비밀번호를 생성하고 강도를 확인합니다.", status: "Ready", icon: "key-round" },
   { key: "color", cat: "Design", name: "Color Converter", desc: "HEX, RGB, HSL 색상 값을 서로 변환하고 미리 봅니다.", status: "Ready", icon: "palette" },
   { key: "subnet", cat: "Network", name: "Subnet Calculator", desc: "IPv4 CIDR의 네트워크, 브로드캐스트, 호스트 범위를 계산합니다.", status: "Ready", icon: "network" },
-  { key: "rename", cat: "Files", name: "File Renamer", desc: "파일명 일괄 변경 규칙을 테스트하는 도구입니다.", status: "Labs", icon: "files" },
   { key: "textcleaner", cat: "Text Utility", name: "Text Cleaner", desc: "공백, 줄바꿈, 특수문자를 정리하는 실제 구현 도구입니다.", status: "Ready", icon: "sparkles" },
-  { key: "todo", cat: "Personal Ops", name: "Todo List", desc: "작업 목록과 체크리스트를 관리하는 도구입니다.", status: "Labs", icon: "list-checks" },
-  { key: "work", cat: "Time & Holiday", name: "Work Manager", desc: "근무일, 휴일, 연차 시뮬레이션을 위한 슬롯입니다.", status: "Labs", icon: "calendar-range" },
-  { key: "tax", cat: "Finance", name: "Year-end Tax", desc: "연말정산 계산과 시나리오 비교 도구 자리입니다.", status: "Labs", icon: "coins" },
-  { key: "lunch", cat: "Dining", name: "Lunch Guide", desc: "잠실 근처 점심 후보와 랜덤 추천을 연결할 수 있습니다.", status: "Labs", icon: "map-pin" },
 ];
 
-const readyToolKeys = new Set(["directory", "signature", "onboarding", "netcheck", "imagestudio", "pdf", "diff", "json", "base64", "uuid", "urlcodec", "jwt", "hash", "regex", "timestamp", "cron", "password", "color", "subnet", "textcleaner"]);
-const visibleTools = [...officialTools, ...labTools].filter((tool) => readyToolKeys.has(tool.key));
+const visibleTools = [...officialTools, ...labTools];
 
 const policyTools = policies.map((policy) => ({
   key: policy.key,
   cat: "Policy",
   name: policy.title,
   desc: policy.desc,
-  status: "Planned",
+  status: "Policy",
   icon: policy.icon,
 }));
 
@@ -134,7 +125,7 @@ function refreshIcons() {
 }
 
 function getMenuVisibility() {
-  const defaults = Object.fromEntries(configurableMenuItems.map((item) => [item.key, readyToolKeys.has(item.key)]));
+  const defaults = Object.fromEntries(configurableMenuItems.map((item) => [item.key, true]));
   try {
     return { ...defaults, ...JSON.parse(localStorage.getItem(menuVisibilityKey) || "{}") };
   } catch {
@@ -717,16 +708,6 @@ function setActive(route) {
   });
 }
 
-function renderPolicyMenu() {
-  const menu = document.querySelector("#policyMenu");
-  if (!menu) return;
-  menu.innerHTML = policies.map((policy) => `
-    <button type="button" data-route="${policy.key}">
-      ${icon(policy.icon)}<span>${policy.title}</span>
-    </button>
-  `).join("");
-}
-
 function card(tool) {
   return `
     <article class="tool-card">
@@ -910,6 +891,59 @@ function renderPlaceholder(tool) {
   refreshIcons();
 }
 
+function renderPolicyIndex() {
+  const tool = officialTools.find((item) => item.key === "policy");
+  viewTitle.textContent = tool.name.toUpperCase();
+  content.className = "content custom-scrollbar";
+  content.innerHTML = `
+    <section class="tool-panel view">
+      <div class="tool-panel-header">
+        <div>
+          <h3>${tool.name}</h3>
+          <p>${tool.desc}</p>
+        </div>
+        <button class="secondary-button" type="button" data-open="home">홈으로</button>
+      </div>
+      <div class="tool-body">
+        <section class="tool-grid">${policyTools.map(card).join("")}</section>
+      </div>
+    </section>
+  `;
+  refreshIcons();
+}
+
+function renderPolicyDetail(policy) {
+  if (!policy.steps?.length) {
+    renderPlaceholder({ name: policy.title, desc: policy.desc, icon: policy.icon });
+    return;
+  }
+  viewTitle.textContent = policy.title.toUpperCase();
+  content.className = "content custom-scrollbar";
+  const links = (policy.links || []).filter((link) => link.url).map((link) => `
+    <a class="policy-link" href="${escapeHtml(normalizeUrl(link.url))}" target="_blank" rel="noopener noreferrer">${icon("external-link")}<span>${escapeHtml(link.label)}</span></a>
+  `).join("");
+  content.innerHTML = `
+    <section class="tool-panel view policy-view">
+      <div class="tool-panel-header">
+        <div>
+          <h3>${escapeHtml(policy.title)}</h3>
+          <p>${escapeHtml(policy.desc)}</p>
+        </div>
+        <button class="secondary-button" type="button" data-open="policy">정책 목록</button>
+      </div>
+      <div class="tool-body">
+        ${policy.summary ? `<p class="policy-summary">${escapeHtml(policy.summary)}</p>` : ""}
+        <ol class="policy-steps">
+          ${policy.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
+        </ol>
+        ${links ? `<div class="policy-links">${links}</div>` : ""}
+        ${policy.contact ? `<p class="policy-contact">${icon("message-circle")}<span>${escapeHtml(policy.contact)}</span></p>` : ""}
+      </div>
+    </section>
+  `;
+  refreshIcons();
+}
+
 const onboardingPhases = cfg.onboarding?.phases || [];
 
 const onboardingAccessRows = cfg.onboarding?.accessRows || [];
@@ -1014,7 +1048,6 @@ function renderSettingsMenuSettings() {
             `).join("")}
           </div>
           <div class="button-row">
-            <button class="secondary-button" type="button" id="showReadyMenus">Ready만 표시</button>
             <button class="secondary-button" type="button" id="showAllMenus">전체 표시</button>
             <button class="danger-button" type="button" id="hideAllMenus">전체 숨김</button>
           </div>
@@ -4077,12 +4110,6 @@ function bindSettings() {
     });
   });
 
-  document.querySelector("#showReadyMenus").addEventListener("click", () => {
-    const visibility = Object.fromEntries(configurableMenuItems.map((item) => [item.key, readyToolKeys.has(item.key)]));
-    writeVisibility(visibility);
-    renderSettingsMenuSettings();
-  });
-
   document.querySelector("#showAllMenus").addEventListener("click", () => {
     const visibility = Object.fromEntries(configurableMenuItems.map((item) => [item.key, true]));
     writeVisibility(visibility);
@@ -5054,8 +5081,7 @@ function openRoute(route) {
   }
 
   if (route === "policy") {
-    const tool = officialTools.find((item) => item.key === "policy");
-    renderPlaceholder(tool);
+    renderPolicyIndex();
     return;
   }
 
@@ -5179,6 +5205,12 @@ function openRoute(route) {
     return;
   }
 
+  const policy = policies.find((item) => item.key === route);
+  if (policy) {
+    renderPolicyDetail(policy);
+    return;
+  }
+
   const tool = allTools.find((item) => item.key === route);
   renderPlaceholder(tool || { key: route, cat: "Tool", name: route, desc: "준비 중인 도구입니다.", status: "Draft", icon: "wrench" });
 }
@@ -5190,15 +5222,6 @@ document.addEventListener("click", (event) => {
   if (routeButton) openRoute(routeButton.dataset.route);
   if (openButton) openRoute(openButton.dataset.open);
 });
-
-const policyToggle = document.querySelector("#policyToggle");
-if (policyToggle) {
-  policyToggle.addEventListener("click", () => {
-    const menu = document.querySelector("#policyMenu");
-    menu.classList.toggle("open");
-    policyToggle.classList.toggle("closed", !menu.classList.contains("open"));
-  });
-}
 
 document.querySelector("#sidebarButton").addEventListener("click", () => {
   if (isMobileViewport()) {
@@ -5235,7 +5258,6 @@ async function startApp() {
   await loadServerSettings();
   restoreSidebarState();
   renderSidebarTools();
-  renderPolicyMenu();
   renderHome();
   refreshIcons();
   await handleEntraRedirect();
