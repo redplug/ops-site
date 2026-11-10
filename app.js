@@ -45,8 +45,6 @@ const dashboardConfigKey = "opsHubDashboardConfig";
 const systemDirectoryConfigKey = "opsHubSystemDirectoryConfig";
 const systemDirectoryRuntimeKey = "opsHubSystemDirectoryRuntime";
 const sidebarCollapsedKey = "opsHubSidebarCollapsed";
-const settingsPasswordKey = "opsHubSettingsPassword";
-const settingsPasswordHistoryKey = "opsHubSettingsPasswordHistory";
 const persistentStoreName = "opsHubPersistentSettings";
 const persistentStoreVersion = 1;
 const persistentValueStore = "settings";
@@ -56,8 +54,6 @@ const persistentSettingKeys = [
   systemDirectoryConfigKey,
   systemDirectoryRuntimeKey,
   sidebarCollapsedKey,
-  settingsPasswordKey,
-  settingsPasswordHistoryKey,
 ];
 let settingsUnlocked = false;
 const configurableMenuItems = [...officialTools, ...labTools, ...policyTools];
@@ -318,83 +314,9 @@ async function restorePersistentSettings() {
   }));
 }
 
-function isSettingsPasswordRecord(record) {
-  return Boolean(
-    record
-    && typeof record === "object"
-    && typeof record.salt === "string"
-    && typeof record.hash === "string"
-    && record.salt
-    && record.hash
-  );
-}
-
 function getSettingsPasswordRecord() {
   if (serverHasPassword) return { hash: "server-managed" };
   return null;
-}
-
-function randomHex(length = 16) {
-  const bytes = new Uint8Array(length);
-  if (window.crypto?.getRandomValues) {
-    window.crypto.getRandomValues(bytes);
-  } else {
-    bytes.forEach((_, index) => { bytes[index] = Math.floor(Math.random() * 256); });
-  }
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function sha256Hex(value) {
-  if (!window.crypto?.subtle) {
-    let hash = 0;
-    for (let index = 0; index < value.length; index += 1) {
-      hash = ((hash << 5) - hash) + value.charCodeAt(index);
-      hash |= 0;
-    }
-    return `fallback-${Math.abs(hash).toString(16)}`;
-  }
-  const bytes = new TextEncoder().encode(value);
-  const digest = await window.crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-function bytesToHex(bytes) {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function pbkdf2Hex(password, salt, iterations = 210000) {
-  if (!window.crypto?.subtle) {
-    return sha256Hex(`${salt}:${password}`);
-  }
-  const material = await window.crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(password),
-    "PBKDF2",
-    false,
-    ["deriveBits"],
-  );
-  const bits = await window.crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt: new TextEncoder().encode(salt),
-      iterations,
-      hash: "SHA-256",
-    },
-    material,
-    256,
-  );
-  return bytesToHex(new Uint8Array(bits));
-}
-
-async function hashSettingsPassword(password, salt = randomHex()) {
-  const iterations = 210000;
-  return {
-    version: 2,
-    algorithm: "PBKDF2-SHA-256",
-    iterations,
-    salt,
-    hash: await pbkdf2Hex(password, salt, iterations),
-  };
 }
 
 async function verifySettingsPassword(password) {
@@ -417,20 +339,6 @@ async function saveSettingsPassword(password) {
   }));
   await syncLocalSettingsToServer();
   return { hash: "server-managed" };
-}
-
-function recordSettingsPasswordEvent(type) {
-  const history = Array.isArray(readStoredJson(settingsPasswordHistoryKey))
-    ? readStoredJson(settingsPasswordHistoryKey)
-    : [];
-  const next = [
-    {
-      type,
-      at: new Date().toISOString(),
-    },
-    ...history,
-  ].slice(0, 20);
-  writeStoredJson(settingsPasswordHistoryKey, next);
 }
 
 function formatStoredDate(value) {
