@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ops Portfolio Hub | IT Operations Center</title>
+  <title>Ops Hub | IT Operations Portal</title>
   <script src="vendor/lucide.min.js"></script>
   <script src="vendor/pdf-lib.min.js"></script>
   <link rel="stylesheet" href="styles.css?v=20260709-dev-tools-2">
@@ -14,13 +14,13 @@
 
     <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <div class="brand-mark"><i data-lucide="terminal"></i></div>
+        <div class="brand-mark" id="brandMark"><i data-lucide="terminal"></i></div>
         <div class="brand-copy">
           <div class="brand-row">
-            <h1>Ops Hub</h1>
+            <h1 id="brandName">Ops Hub</h1>
             <button class="version-pill" id="versionButton" type="button">v1.0</button>
           </div>
-          <p>IT Operations Portfolio</p>
+          <p id="brandTagline">IT Operations Portal</p>
         </div>
         <div class="sidebar-controls">
           <button class="icon-button sidebar-icon-button" id="sidebarButton" type="button" aria-label="Toggle sidebar menu">
@@ -41,8 +41,8 @@
       <div class="sidebar-footer">
         <div class="footer-icon"><i data-lucide="server-cog"></i></div>
         <div>
-          <strong>Ops Portfolio</strong>
-          <span>Static tool platform</span>
+          <strong id="footerTitle">Ops Hub</strong>
+          <span id="footerSub">IT operations portal</span>
         </div>
         <button class="icon-button footer-settings-button" id="settingsToggle" type="button" data-route="settings" aria-label="Open settings">
           <i data-lucide="settings"></i>
@@ -67,6 +67,7 @@
     </main>
   </div>
 
+  <script src="config/site.config.js"></script>
   <script src="app.js?v=20260709-dev-tools-2"></script>
 </body>
 </html>

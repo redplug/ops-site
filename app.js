@@ -1,16 +1,6 @@
-const policies = [
-  { key: "policy-helpdesk", icon: "life-buoy", title: "IT 통합 지원", desc: "문의 유형을 고르고 요청서를 정리하는 정책 허브입니다." },
-  { key: "policy-google-drive", icon: "folder-lock", title: "구글 드라이브 생성/권한", desc: "공유 드라이브 생성과 권한 변경 요청 기준을 안내합니다." },
-  { key: "policy-software", icon: "palette", title: "소프트웨어 라이선스", desc: "상용 소프트웨어 신청, 갱신, 회수 흐름을 정리합니다." },
-  { key: "policy-notion", icon: "notebook-tabs", title: "Notion 신규 공간", desc: "워크스페이스와 팀스페이스 생성 요청을 표준화합니다." },
-  { key: "policy-erp", icon: "settings", title: "ERP 계정 생성/권한", desc: "계정 생성, 부서 이동, 승인권자 변경을 추적합니다." },
-  { key: "policy-common-mail", icon: "mail", title: "그룹메일 생성/관리", desc: "그룹메일 생성과 멤버 변경 요청 초안을 만듭니다." },
-  { key: "policy-equipment", icon: "mouse-pointer-2", title: "IT 장비 대여", desc: "대여 가능 장비와 반납 체크리스트를 제공합니다." },
-  { key: "policy-resignation", icon: "log-out", title: "자산 반납", desc: "퇴사와 휴직 시 장비, 계정, 권한 회수를 점검합니다." },
-  { key: "policy-loss-damage", icon: "hammer", title: "자산 손망실", desc: "파손, 분실, 도난 보고와 후속 처리 기준을 안내합니다." },
-  { key: "policy-device-lifecycle", icon: "laptop", title: "장비 초기화/교체", desc: "초기화, 재배정, 교체 요청의 운영 절차를 정리합니다." },
-  { key: "policy-ssl-vpn", icon: "globe-2", title: "해외 SSL VPN 신청", desc: "해외 출장자 VPN 신청과 보안 안내를 제공합니다." },
-];
+const cfg = window.OPS_CONFIG || {};
+const brand = cfg.brand || {};
+const policies = cfg.policies || [];
 
 const officialTools = [
   { key: "policy", cat: "IT Policy & Guide", name: "Policy Navigator", desc: "사내 IT 표준 정책 가이드와 요청서 생성 흐름입니다.", status: "Official", icon: "shield-check" },
@@ -98,55 +88,28 @@ const serverSettingKeys = [
   sidebarCollapsedKey,
 ];
 
+// config/site.config.js 에 값이 없을 때 쓰는 최소 기본값 (실제 문구는 설정 파일에서 관리)
 const defaultDashboardConfig = {
   channelLabel: "IT Comm.",
   channelName: "#ops-hub",
-  channelCopy: "IT 운영 업무와 개인 유틸리티를 한곳에서 실행하는 포트폴리오 포털입니다.",
+  channelCopy: "",
   weatherLabel: "Weather",
   weatherLocation: "서울특별시",
   weatherLatitude: 37.5665,
   weatherLongitude: 126.978,
-  menuTitle: "Today Menu",
-  menuItems: [
-    { label: "한식", value: "제육 정식" },
-    { label: "양식", value: "치킨 샐러드" },
-    { label: "간편", value: "샌드위치" },
-  ],
-  roomTitle: "Meeting Room Status",
-  roomItems: [
-    { label: "Total", value: "12" },
-    { label: "Free", value: "7" },
-    { label: "Busy", value: "5" },
-  ],
+  menuTitle: "",
+  menuItems: [],
+  roomTitle: "",
+  roomItems: [],
+  ...cfg.dashboard,
 };
 
 const allTools = [...officialTools, ...labTools, ...policyTools];
 
 const systemDirectoryDefaults = {
-  entra: {
-    tenantName: "테스트 Entra ID",
-    tenantId: "",
-    clientId: "",
-    clientSecretConfigured: false,
-    scopes: "https://graph.microsoft.com/.default",
-    primaryDomain: "contoso.onmicrosoft.com",
-    adminAccount: "admin@contoso.onmicrosoft.com",
-    owner: "IT Operations",
-    note: "현재 테스트 우선 연동 대상입니다. 실제 tenant ID와 관리자 계정으로 교체하세요.",
-  },
-  google: {
-    domain: "company.com",
-    adminAccount: "admin@company.com",
-    owner: "IT Operations",
-    note: "Google Workspace 도입 시 도메인과 관리자 계정을 입력하세요.",
-  },
-  slack: {
-    workspaceName: "company",
-    workspaceUrl: "https://company.slack.com",
-    adminAccount: "owner@company.com",
-    owner: "IT Operations",
-    note: "Slack workspace URL 확정 후 관리자 링크가 활성화됩니다.",
-  },
+  entra: { tenantName: "", tenantId: "", clientId: "", clientSecretConfigured: false, scopes: "https://graph.microsoft.com/.default", primaryDomain: "", adminAccount: "", owner: "", note: "", ...cfg.directory?.entra },
+  google: { domain: "", adminAccount: "", owner: "", note: "", ...cfg.directory?.google },
+  slack: { workspaceName: "", workspaceUrl: "", adminAccount: "", owner: "", note: "", ...cfg.directory?.slack },
 };
 
 const systemDirectoryRuntimeDefaults = {
@@ -938,7 +901,7 @@ function renderPlaceholder(tool) {
           <div>
             ${icon(tool.icon)}
             <h4>${tool.name} module slot</h4>
-            <p>이 화면은 포트폴리오 포털의 확장 지점입니다. 다음 단계에서 실제 폼, 계산기, 파일 처리, API 연동으로 교체합니다.</p>
+            <p>이 화면은 확장 지점입니다. 다음 단계에서 실제 폼, 계산기, 파일 처리, API 연동으로 교체합니다.</p>
           </div>
         </div>
       </div>
@@ -947,69 +910,9 @@ function renderPlaceholder(tool) {
   refreshIcons();
 }
 
-const onboardingPhases = [
-  {
-    title: "입사 전 D-5 ~ D-1",
-    owner: "IT Ops / HR",
-    goal: "계정, 장비, 접근 권한을 첫 출근 전에 준비합니다.",
-    items: [
-      "HR 입사자 정보 확인: 영문명, 개인 연락처, 부서, 직무, 매니저, 입사일",
-      "회사 이메일과 Google Workspace 또는 Microsoft 365 기본 계정 생성",
-      "Slack, Notion, GitHub, Jira, Confluence 초대 발송",
-      "역할별 기본 그룹 지정: All Hands, 부서 채널, 보안 공지, 개발 조직",
-      "노트북, 충전기, 모니터, 허브, 보안키 또는 OTP 수령 준비",
-      "MDM 등록 대상 장비 확인 및 초기화 이미지 적용",
-    ],
-  },
-  {
-    title: "Day 1 오전",
-    owner: "IT Ops",
-    goal: "업무 시작에 필요한 인증과 장비 사용을 완료합니다.",
-    items: [
-      "신분 확인 후 노트북과 주변기기 지급, 자산 번호 안내",
-      "초기 비밀번호 변경, MFA 등록, 백업 인증 수단 설정",
-      "MDM 프로필 설치 상태 확인: 디스크 암호화, 화면 잠금, 패치 정책",
-      "Wi-Fi, VPN, 프린터, 회의실 디스플레이 연결 테스트",
-      "Slack 프로필, 캘린더 타임존, 이메일 서명 기본값 설정",
-      "보안 교육 링크와 피싱 신고 채널 안내",
-    ],
-  },
-  {
-    title: "Day 1 오후",
-    owner: "Manager / Buddy",
-    goal: "팀 업무 도구와 개발 환경의 최소 접근을 검증합니다.",
-    items: [
-      "팀 Slack 채널, Notion 팀스페이스, Jira 프로젝트 접근 확인",
-      "GitHub SSO 인증, 조직 초대 수락, 2FA 활성화 확인",
-      "개발자라면 SSH key 또는 GPG key 등록 정책 안내",
-      "사내 패키지 저장소, Docker registry, VPN 접근 테스트",
-      "권한 누락 항목은 Helpdesk 티켓으로 요청 경로 통일",
-      "첫 주 온보딩 일정과 필수 미팅 캘린더 확인",
-    ],
-  },
-  {
-    title: "첫 주",
-    owner: "Employee / IT Ops",
-    goal: "보안 기준과 협업 흐름을 안정화합니다.",
-    items: [
-      "보안 교육, 개인정보 처리, 오픈소스 라이선스 가이드 수료",
-      "비밀번호 관리자 사용법과 secret 저장 금지 원칙 확인",
-      "장비 분실/파손, 계정 잠김, 권한 요청 프로세스 숙지",
-      "부서별 필수 SaaS 접근 권한 최종 점검",
-      "개발/운영 권한은 최소 권한 원칙으로 별도 승인 진행",
-      "온보딩 체크리스트 완료 여부를 매니저와 리뷰",
-    ],
-  },
-];
+const onboardingPhases = cfg.onboarding?.phases || [];
 
-const onboardingAccessRows = [
-  ["기본 계정", "회사 이메일, SSO, MFA, 비밀번호 관리자", "IT Ops"],
-  ["커뮤니케이션", "Slack, Google Calendar 또는 Outlook, Zoom/Meet", "IT Ops"],
-  ["문서/업무", "Notion, Confluence, Jira, Google Drive", "Manager"],
-  ["개발", "GitHub, IDE 라이선스, package registry, staging 접근", "Tech Lead"],
-  ["보안", "MDM, EDR, VPN, 보안 교육, 피싱 신고 채널", "Security"],
-  ["시설", "출입 카드, 회의실 예약, 프린터, 좌석 안내", "Office"],
-];
+const onboardingAccessRows = cfg.onboarding?.accessRows || [];
 
 function renderOnboardingGuide() {
   viewTitle.textContent = "IT ONBOARDING GUIDE";
@@ -1019,7 +922,7 @@ function renderOnboardingGuide() {
       <div class="tool-panel-header">
         <div>
           <h3>IT Onboarding Guide</h3>
-          <p>일반적인 IT 회사 신입 입사자의 첫 주 환경 셋업 체크리스트 샘플입니다.</p>
+          <p>${escapeHtml(cfg.onboarding?.intro || "")}</p>
         </div>
         <button class="secondary-button" type="button" data-open="home">홈으로</button>
       </div>
@@ -1904,11 +1807,9 @@ function renderTextCleaner() {
   refreshIcons();
 }
 
-const signatureDefaults = {
-  name: "홍길동",
-  email: "hong.gildong@company.com",
-  department: "IT Operations Team",
-};
+const signatureDefaults = { name: "", email: "", department: "", ...cfg.signature };
+const signatureMarkText = brand.signatureMark || "OH";
+const signatureFooterText = brand.signatureFooter || "Ops Hub · IT Operations";
 
 function buildSignatureHtml({ name, email, department }) {
   const cleanName = escapeHtml(name || signatureDefaults.name);
@@ -1920,7 +1821,7 @@ function buildSignatureHtml({ name, email, department }) {
     <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:Arial,'Noto Sans KR',sans-serif;color:#171b22;">
       <tr>
         <td style="padding:0 14px 0 0;vertical-align:top;">
-          <div style="width:42px;height:42px;border-radius:8px;background:#1769e0;color:#ffffff;font-size:18px;font-weight:700;line-height:42px;text-align:center;">OH</div>
+          <div style="width:42px;height:42px;border-radius:8px;background:#1769e0;color:#ffffff;font-size:18px;font-weight:700;line-height:42px;text-align:center;">${escapeHtml(signatureMarkText)}</div>
         </td>
         <td style="padding:0;vertical-align:top;border-left:2px solid #dde3ea;padding-left:14px;">
           <div style="font-size:15px;font-weight:700;line-height:1.35;color:#171b22;">${cleanName}</div>
@@ -1929,7 +1830,7 @@ function buildSignatureHtml({ name, email, department }) {
           <div style="font-size:12px;line-height:1.5;color:#5b6675;">
             <a href="mailto:${mailtoEmail}" style="color:#1769e0;text-decoration:none;">${cleanEmail}</a>
           </div>
-          <div style="font-size:11px;line-height:1.55;color:#8a96a7;">Ops Hub · IT Operations Portfolio</div>
+          <div style="font-size:11px;line-height:1.55;color:#8a96a7;">${escapeHtml(signatureFooterText)}</div>
         </td>
       </tr>
     </table>
@@ -1955,7 +1856,7 @@ function updateSignaturePreview() {
 
 async function copySignatureHtml(button) {
   const signatureHtml = buildSignatureHtml(getSignatureValues()).trim();
-  const plainText = `${getSignatureValues().name}\n${getSignatureValues().department}\n${getSignatureValues().email}\nOps Hub · IT Operations Portfolio`;
+  const plainText = `${getSignatureValues().name}\n${getSignatureValues().department}\n${getSignatureValues().email}\n${signatureFooterText}`;
 
   try {
     if (window.ClipboardItem) {
@@ -5313,7 +5214,23 @@ window.addEventListener("resize", restoreSidebarState);
 document.querySelector("#refreshButton").addEventListener("click", () => openRoute(document.querySelector("[data-route].active")?.dataset.route || "home"));
 document.querySelector("#versionButton").addEventListener("click", () => openRoute("textcleaner"));
 
+function applyBranding() {
+  const setText = (selector, text) => {
+    const el = document.querySelector(selector);
+    if (el && text) el.textContent = text;
+  };
+  setText("#brandName", brand.name);
+  setText("#brandTagline", brand.tagline);
+  setText("#versionButton", brand.version);
+  setText("#footerTitle", brand.footerTitle);
+  setText("#footerSub", brand.footerSub);
+  const mark = document.querySelector("#brandMark");
+  if (mark && brand.mark) mark.innerHTML = icon(escapeHtml(brand.mark));
+  if (brand.name) document.title = `${brand.name} | ${brand.tagline || "IT Operations Center"}`;
+}
+
 async function startApp() {
+  applyBranding();
   await restorePersistentSettings();
   await loadServerSettings();
   restoreSidebarState();
