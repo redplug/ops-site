@@ -895,8 +895,8 @@ function renderPlaceholder(tool) {
     <section class="tool-panel view">
       <div class="tool-panel-header">
         <div>
-          <h3>${tool.name}</h3>
-          <p>${tool.desc}</p>
+          <h3>${escapeHtml(tool.name)}</h3>
+          <p>${escapeHtml(tool.desc)}</p>
         </div>
         <button class="secondary-button" type="button" data-open="home">홈으로</button>
       </div>
@@ -904,7 +904,7 @@ function renderPlaceholder(tool) {
         <div class="placeholder-box">
           <div>
             ${icon(tool.icon)}
-            <h4>${tool.name} module slot</h4>
+            <h4>${escapeHtml(tool.name)} module slot</h4>
             <p>이 화면은 확장 지점입니다. 다음 단계에서 실제 폼, 계산기, 파일 처리, API 연동으로 교체합니다.</p>
           </div>
         </div>
@@ -5093,150 +5093,75 @@ function bindNetCheck() {
   });
 }
 
+// 단순 라우트: 키 = 해시(#key) 값, 값 = 화면 렌더 함수
+const routes = {
+  home: renderHome,
+  policy: renderPolicyIndex,
+  directory: renderSystemDirectory,
+  signature: renderSignatureCreator,
+  onboarding: renderOnboardingGuide,
+  textcleaner: renderTextCleaner,
+  netcheck: renderNetCheck,
+  imagestudio: renderImageStudio,
+  diff: renderDiffExpert,
+  json: renderJsonFormatter,
+  base64: renderBase64Codec,
+  uuid: renderUuidGenerator,
+  urlcodec: renderUrlCodec,
+  jwt: renderJwtDecoder,
+  hash: renderHashGenerator,
+  regex: renderRegexTester,
+  timestamp: renderTimestampConverter,
+  cron: renderCronParser,
+  password: renderPasswordGenerator,
+  color: renderColorConverter,
+  subnet: renderSubnetCalculator,
+  pdf: renderSecurePdf,
+  settings: () => openSettingsRoute("settings"),
+  "settings-menu": () => openSettingsRoute("settings-menu"),
+  "settings-integrations": () => openSettingsRoute("settings-integrations"),
+  "settings-security": () => openSettingsRoute("settings-security"),
+};
+
 function openRoute(route) {
-  currentRoute = route || "home";
+  route = route || "home";
+  currentRoute = route;
   closeMobileSidebar();
   setActive(route);
 
+  if (Object.hasOwn(routes, route)) {
+    routes[route]();
+  } else {
+    const policy = policies.find((item) => item.key === route);
+    if (policy) {
+      renderPolicyDetail(policy);
+    } else {
+      const tool = allTools.find((item) => item.key === route);
+      renderPlaceholder(tool || { key: route, cat: "Tool", name: route, desc: "준비 중인 도구입니다.", status: "Draft", icon: "wrench" });
+    }
+  }
+
+  // 딥링크: 현재 화면을 URL 해시에 반영 (home은 깔끔한 기본 URL 유지)
   if (route === "home") {
-    renderHome();
-    return;
+    if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+  } else if (location.hash.slice(1) !== route) {
+    location.hash = route;
   }
-
-  if (route === "policy") {
-    renderPolicyIndex();
-    return;
-  }
-
-  if (route === "directory") {
-    renderSystemDirectory();
-    return;
-  }
-
-  if (route === "signature") {
-    renderSignatureCreator();
-    return;
-  }
-
-  if (route === "onboarding") {
-    renderOnboardingGuide();
-    return;
-  }
-
-  if (route === "textcleaner") {
-    renderTextCleaner();
-    return;
-  }
-
-  if (route === "netcheck") {
-    renderNetCheck();
-    return;
-  }
-
-  if (route === "imagestudio") {
-    renderImageStudio();
-    return;
-  }
-
-  if (route === "diff") {
-    renderDiffExpert();
-    return;
-  }
-
-  if (route === "json") {
-    renderJsonFormatter();
-    return;
-  }
-
-  if (route === "base64") {
-    renderBase64Codec();
-    return;
-  }
-
-  if (route === "uuid") {
-    renderUuidGenerator();
-    return;
-  }
-
-  if (route === "urlcodec") {
-    renderUrlCodec();
-    return;
-  }
-
-  if (route === "jwt") {
-    renderJwtDecoder();
-    return;
-  }
-
-  if (route === "hash") {
-    renderHashGenerator();
-    return;
-  }
-
-  if (route === "regex") {
-    renderRegexTester();
-    return;
-  }
-
-  if (route === "timestamp") {
-    renderTimestampConverter();
-    return;
-  }
-
-  if (route === "cron") {
-    renderCronParser();
-    return;
-  }
-
-  if (route === "password") {
-    renderPasswordGenerator();
-    return;
-  }
-
-  if (route === "color") {
-    renderColorConverter();
-    return;
-  }
-
-  if (route === "subnet") {
-    renderSubnetCalculator();
-    return;
-  }
-
-  if (route === "pdf") {
-    renderSecurePdf();
-    return;
-  }
-
-  if (route === "settings") {
-    openSettingsRoute("settings");
-    return;
-  }
-
-  if (route === "settings-menu") {
-    openSettingsRoute("settings-menu");
-    return;
-  }
-
-  if (route === "settings-integrations") {
-    openSettingsRoute("settings-integrations");
-    return;
-  }
-
-  if (route === "settings-security") {
-    openSettingsRoute("settings-security");
-    return;
-  }
-
-  const policy = policies.find((item) => item.key === route);
-  if (policy) {
-    renderPolicyDetail(policy);
-    return;
-  }
-
-  const tool = allTools.find((item) => item.key === route);
-  renderPlaceholder(tool || { key: route, cat: "Tool", name: route, desc: "준비 중인 도구입니다.", status: "Draft", icon: "wrench" });
 }
+
+// 해시 값 읽기: 잘못된 %-인코딩이어도 앱이 멈추지 않게 원문 그대로 사용
+function readRouteFromHash() {
+  let name = location.hash.slice(1);
+  try {
+    name = decodeURIComponent(name);
+  } catch {}
+  return name || "home";
+}
+
+window.addEventListener("hashchange", () => {
+  const next = readRouteFromHash();
+  if (next !== currentRoute) openRoute(next);
+});
 
 document.addEventListener("click", (event) => {
   const routeButton = event.target.closest("[data-route]");
@@ -5281,7 +5206,7 @@ async function startApp() {
   document.querySelector("#syncBadgeText").textContent = serverAvailable ? "Server Connected" : "Local Mode";
   restoreSidebarState();
   renderSidebarTools();
-  renderHome();
+  openRoute(readRouteFromHash());
   refreshIcons();
   await handleEntraRedirect();
 }
