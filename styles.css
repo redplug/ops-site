@@ -2829,7 +2829,15 @@ select:focus {
   }
 }
 
+.mobile-menu-button {
+  display: none;
+}
+
 @media (max-width: 760px) {
+  .mobile-menu-button {
+    display: grid;
+  }
+
   .sidebar {
     position: fixed;
     z-index: 40;

@@ -5079,14 +5079,18 @@ document.addEventListener("click", (event) => {
   if (openButton) openRoute(openButton.dataset.open);
 });
 
-document.querySelector("#sidebarButton").addEventListener("click", () => {
+function toggleSidebar() {
   if (isMobileViewport()) {
     sidebar.classList.toggle("mobile-open");
     overlay.classList.toggle("show", sidebar.classList.contains("mobile-open"));
     return;
   }
   setSidebarCollapsed(!sidebar.classList.contains("collapsed"));
-});
+}
+
+document.querySelector("#sidebarButton").addEventListener("click", toggleSidebar);
+// 모바일에서는 사이드바가 화면 밖에 있어 topbar 버튼으로만 열 수 있음
+document.querySelector("#mobileMenuButton").addEventListener("click", toggleSidebar);
 
 overlay.addEventListener("click", closeMobileSidebar);
 window.addEventListener("resize", restoreSidebarState);

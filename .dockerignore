@@ -8,3 +8,4 @@ node_modules
 test
 .local-data
 .env
+.DS_Store
