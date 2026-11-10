@@ -32,7 +32,7 @@ PORT=4173 DATA_DIR=.local-data node server.js
 | `APP_PORT` | `8080` | Docker에서 호스트에 여는 포트 (`.env`) |
 | `ADMIN_PASSWORD` | 없음 | 설정 시 서버 기동 때 관리자 비밀번호로 저장. 8자 이상 |
 | `COOKIE_SECURE` | 없음 | `true`면 세션 쿠키에 항상 `Secure` 부착 |
-| `PORT` | `8080` | 서버가 listen하는 포트 (Docker 이미지 안에서는 8080 고정) |
+| `PORT` | `8080` | 서버가 listen하는 포트 (Docker 이미지는 기본값 8080으로 설정) |
 | `DATA_DIR` | `./data` | Settings 저장 파일(`settings.json`) 위치. Docker에서는 `/app/data` (볼륨) |
 
 ## 내 조직용으로 바꾸기
