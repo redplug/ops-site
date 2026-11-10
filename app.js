@@ -69,6 +69,7 @@ const settingsSections = [
 let currentRoute = "home";
 let serverHasPassword = false;
 let serverAuthenticated = false;
+let serverAvailable = false;
 let serverPasswordMeta = null;
 let serverPasswordHistory = [];
 const serverSettingKeys = [
@@ -88,11 +89,10 @@ const defaultDashboardConfig = {
   weatherLocation: "서울특별시",
   weatherLatitude: 37.5665,
   weatherLongitude: 126.978,
-  menuTitle: "",
-  menuItems: [],
-  roomTitle: "",
-  roomItems: [],
   ...cfg.dashboard,
+  noticeTitle: cfg.dashboard?.notice?.title || "",
+  noticeBody: cfg.dashboard?.notice?.body || "",
+  quickLinks: normalizeQuickLinks(cfg.dashboard?.quickLinks),
 };
 
 const allTools = [...officialTools, ...labTools, ...policyTools];
@@ -192,6 +192,7 @@ function applyServerSettings(payload) {
 async function loadServerSettings() {
   try {
     applyServerSettings(await apiRequest("/api/settings/bootstrap"));
+    serverAvailable = true;
   } catch {}
 }
 
@@ -445,11 +446,25 @@ function formatStoredDate(value) {
   });
 }
 
-function normalizeDashboardItems(items, defaults) {
-  return defaults.map((fallback, index) => ({
-    label: String(items?.[index]?.label || fallback.label),
-    value: String(items?.[index]?.value || fallback.value),
-  }));
+// 퀵링크: 항상 { label, url } 문자열 객체 배열, 최대 12개
+function normalizeQuickLinks(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item) => ({ label: String(item?.label ?? "").trim(), url: String(item?.url ?? "").trim() }))
+    .filter((item) => item.label && item.url)
+    .slice(0, 12);
+}
+
+// 편집 폼 textarea의 "라벨 | URL" 줄을 파싱
+function parseQuickLinkLines(text) {
+  return normalizeQuickLinks(
+    String(text || "")
+      .split("\n")
+      .map((line) => {
+        const [label = "", ...rest] = line.split("|");
+        return { label, url: rest.join("|") };
+      }),
+  );
 }
 
 function getDashboardConfig() {
@@ -466,8 +481,9 @@ function getDashboardConfig() {
     return {
       ...defaultDashboardConfig,
       ...saved,
-      menuItems: normalizeDashboardItems(saved.menuItems, defaultDashboardConfig.menuItems),
-      roomItems: normalizeDashboardItems(saved.roomItems, defaultDashboardConfig.roomItems),
+      noticeTitle: String(saved.noticeTitle ?? defaultDashboardConfig.noticeTitle),
+      noticeBody: String(saved.noticeBody ?? defaultDashboardConfig.noticeBody),
+      quickLinks: normalizeQuickLinks(saved.quickLinks ?? defaultDashboardConfig.quickLinks),
     };
   } catch {
     return defaultDashboardConfig;
@@ -739,22 +755,14 @@ function renderHome() {
           <p class="hero-copy">${escapeHtml(dashboard.channelCopy)}</p>
         </article>
         ${renderWeatherCard(dashboard)}
-        <article class="hero-card meal">
-          <span class="future-badge">향후 연동 필요</span>
-          <div class="card-topline">
-            <div class="card-label">${icon("utensils")} ${escapeHtml(dashboard.menuTitle)}</div>
-          </div>
-          <div class="meal-grid">
-            ${dashboard.menuItems.map((item) => `<div class="mini-box"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.value)}</span></div>`).join("")}
-          </div>
+        <article class="hero-card notice-card">
+          <div class="card-label">${icon("bell")} ${escapeHtml(dashboard.noticeTitle)}</div>
+          <p class="hero-copy notice-body">${escapeHtml(dashboard.noticeBody)}</p>
         </article>
-        <article class="hero-card rooms">
-          <span class="future-badge">향후 연동 필요</span>
-          <div class="card-topline">
-            <div class="card-label">${icon("layout-grid")} ${escapeHtml(dashboard.roomTitle)}</div>
-          </div>
-          <div class="room-grid">
-            ${dashboard.roomItems.map((item) => `<div class="mini-box"><strong>${escapeHtml(item.value)}</strong><span>${escapeHtml(item.label)}</span></div>`).join("")}
+        <article class="hero-card links-card">
+          <div class="card-label">${icon("link")} Quick Links</div>
+          <div class="quick-grid">
+            ${dashboard.quickLinks.map((link) => `<a class="mini-box quick-link" href="${escapeHtml(normalizeUrl(link.url))}" target="_blank" rel="noopener noreferrer"><strong>${escapeHtml(link.label)}</strong></a>`).join("") || `<p class="hero-copy">등록된 링크가 없습니다.</p>`}
           </div>
         </article>
       </section>
@@ -779,6 +787,18 @@ function renderHome() {
           <div class="form-group wide">
             <label for="dashboardWeatherLocation">Weather Location</label>
             <input id="dashboardWeatherLocation" name="weatherLocation" type="text" placeholder="예: 서울특별시, 잠실역, New York" value="${escapeHtml(getDashboardWeatherConfig(dashboard).location)}">
+          </div>
+          <div class="form-group">
+            <label for="dashboardNoticeTitle">Notice Title</label>
+            <input id="dashboardNoticeTitle" name="noticeTitle" type="text" value="${escapeHtml(dashboard.noticeTitle)}">
+          </div>
+          <div class="form-group wide">
+            <label for="dashboardNoticeBody">Notice Body</label>
+            <textarea id="dashboardNoticeBody" name="noticeBody" rows="3">${escapeHtml(dashboard.noticeBody)}</textarea>
+          </div>
+          <div class="form-group wide">
+            <label for="dashboardQuickLinks">Quick Links (한 줄에 라벨 | URL, 최대 12개)</label>
+            <textarea id="dashboardQuickLinks" name="quickLinks" rows="4">${escapeHtml(dashboard.quickLinks.map((link) => `${link.label} | ${link.url}`).join("\n"))}</textarea>
           </div>
           <div class="button-row dashboard-form-actions">
             <button class="primary-button" type="submit">${icon("save")} 저장</button>
@@ -806,6 +826,10 @@ function bindDashboardEditor() {
   if (!editor || !form || !editButton) return;
 
   editButton.addEventListener("click", () => {
+    if (serverAvailable && !serverAuthenticated) {
+      openRoute("settings");
+      return;
+    }
     editor.hidden = !editor.hidden;
     editButton.innerHTML = editor.hidden ? `${icon("pencil")} 수정` : `${icon("x")} 닫기`;
     refreshIcons();
@@ -856,10 +880,9 @@ async function saveDashboardFromForm(form) {
     weatherLocation: weatherPlace.location,
     weatherLatitude: weatherPlace.latitude,
     weatherLongitude: weatherPlace.longitude,
-    menuTitle: previous.menuTitle,
-    menuItems: previous.menuItems,
-    roomTitle: previous.roomTitle,
-    roomItems: previous.roomItems,
+    noticeTitle: String(data.get("noticeTitle") || "").trim(),
+    noticeBody: String(data.get("noticeBody") || "").trim(),
+    quickLinks: parseQuickLinkLines(data.get("quickLinks")),
   };
   await saveDashboardConfig(config);
   renderHome();
@@ -5235,7 +5258,6 @@ document.querySelector("#sidebarButton").addEventListener("click", () => {
 overlay.addEventListener("click", closeMobileSidebar);
 window.addEventListener("resize", restoreSidebarState);
 document.querySelector("#refreshButton").addEventListener("click", () => openRoute(document.querySelector("[data-route].active")?.dataset.route || "home"));
-document.querySelector("#versionButton").addEventListener("click", () => openRoute("textcleaner"));
 
 function applyBranding() {
   const setText = (selector, text) => {
@@ -5256,6 +5278,7 @@ async function startApp() {
   applyBranding();
   await restorePersistentSettings();
   await loadServerSettings();
+  document.querySelector("#syncBadgeText").textContent = serverAvailable ? "Server Connected" : "Local Mode";
   restoreSidebarState();
   renderSidebarTools();
   renderHome();

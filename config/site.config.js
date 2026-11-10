@@ -25,17 +25,17 @@ window.OPS_CONFIG = {
     weatherLocation: "서울특별시", // 날씨 표시 지역 이름
     weatherLatitude: 37.5665, // 날씨 위치 위도
     weatherLongitude: 126.978, // 날씨 위치 경도
-    menuTitle: "Today Menu", // 식단 카드 제목 (교체 예정 항목)
-    menuItems: [
-      { label: "한식", value: "제육 정식" },
-      { label: "양식", value: "치킨 샐러드" },
-      { label: "간편", value: "샌드위치" },
-    ],
-    roomTitle: "Meeting Room Status", // 회의실 카드 제목 (교체 예정 항목)
-    roomItems: [
-      { label: "Total", value: "12" },
-      { label: "Free", value: "7" },
-      { label: "Busy", value: "5" },
+    // 공지: 대시보드 공지 카드. 줄바꿈은 그대로 표시됩니다. 비워두면 카드 내용이 비어 보입니다.
+    notice: {
+      title: "공지사항", // 공지 카드 제목
+      body: "여기에 조직 공지를 적으세요. 예: 이번 주 금요일 17시 이후 사내 VPN 점검이 있습니다.",
+    },
+    // 퀵링크: 대시보드 바로가기 버튼. label(표시 이름)과 url을 적습니다. 샘플 주소이니 실제 주소로 바꾸세요.
+    quickLinks: [
+      { label: "Helpdesk", url: "https://example.com/helpdesk" },
+      { label: "SSO 포털", url: "https://example.com/sso" },
+      { label: "VPN 사용 안내", url: "https://example.com/vpn-guide" },
+      { label: "IT 정책 문서", url: "https://example.com/it-policy" },
     ],
   },
 
