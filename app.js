@@ -1213,8 +1213,8 @@ async function handleSettingsAuthSubmit(form, hasPassword) {
 
   if (!hasPassword) {
     const confirmPassword = String(data.get("confirmPassword") || "");
-    if (password.length < 4) {
-      result.innerHTML = resultRow("warn", "비밀번호 짧음", "비밀번호는 4자 이상으로 설정하세요.");
+    if (password.length < 8) {
+      result.innerHTML = resultRow("warn", "비밀번호 짧음", "비밀번호는 8자 이상으로 설정하세요.");
       return;
     }
     if (password !== confirmPassword) {
@@ -1302,8 +1302,8 @@ async function handleSettingsPasswordChange(form) {
   const newPassword = String(data.get("newPassword") || "");
   const confirmPassword = String(data.get("confirmPassword") || "");
 
-  if (newPassword.length < 4) {
-    result.innerHTML = resultRow("warn", "비밀번호 짧음", "새 비밀번호는 4자 이상으로 설정하세요.");
+  if (newPassword.length < 8) {
+    result.innerHTML = resultRow("warn", "비밀번호 짧음", "새 비밀번호는 8자 이상으로 설정하세요.");
     return;
   }
   if (newPassword !== confirmPassword) {

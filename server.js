@@ -96,6 +96,26 @@ function isAuthenticated(req) {
   return true;
 }
 
+// shortcut: 프록시 뒤에서는 모든 사용자가 같은 IP, 다중 인스턴스 시 외부 저장소 필요
+const loginAttempts = new Map(); // ip -> { count, until }
+const maxLoginAttempts = 5;
+const loginLockMs = 60 * 1000;
+
+function isLoginLocked(ip) {
+  const entry = loginAttempts.get(ip);
+  return Boolean(entry && entry.until > Date.now());
+}
+
+function recordLoginFailure(ip) {
+  const entry = loginAttempts.get(ip) || { count: 0, until: 0 };
+  entry.count += 1;
+  if (entry.count >= maxLoginAttempts) {
+    entry.count = 0;
+    entry.until = Date.now() + loginLockMs;
+  }
+  loginAttempts.set(ip, entry);
+}
+
 function passwordMeta(password) {
   if (!password) return null;
   return {
@@ -115,8 +135,8 @@ function json(res, status, payload, headers = {}) {
   res.end(JSON.stringify(payload));
 }
 
-function setSessionCookie(token) {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+function setSessionCookie(token, req) {
+  const secure = process.env.COOKIE_SECURE === "true" || req.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
   return `ops_session=${encodeURIComponent(token)}; HttpOnly; Path=/; Max-Age=${Math.floor(sessionTtlMs / 1000)}; SameSite=Lax${secure}`;
 }
 
@@ -288,8 +308,8 @@ async function handleApi(req, res) {
         return;
       }
       const { password } = await readBody(req);
-      if (String(password || "").length < 4) {
-        json(res, 400, { error: "비밀번호는 4자 이상이어야 합니다." });
+      if (String(password || "").length < 8) {
+        json(res, 400, { error: "비밀번호는 8자 이상이어야 합니다." });
         return;
       }
       const now = new Date().toISOString();
@@ -297,29 +317,43 @@ async function handleApi(req, res) {
       state.passwordHistory = [{ type: "created", at: now }, ...state.passwordHistory].slice(0, 20);
       writeState(state);
       const token = createSession();
-      json(res, 200, settingsPayload(state, true), { "Set-Cookie": setSessionCookie(token) });
+      json(res, 200, settingsPayload(state, true), { "Set-Cookie": setSessionCookie(token, req) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/api/settings/password/verify") {
+      const ip = req.socket.remoteAddress;
+      if (isLoginLocked(ip)) {
+        json(res, 429, { error: "로그인 시도가 너무 많습니다. 1분 후 다시 시도하세요." }, { "Retry-After": "60" });
+        return;
+      }
       const { password } = await readBody(req);
       if (!verifyPassword(String(password || ""), state.password)) {
+        recordLoginFailure(ip);
         json(res, 401, { error: "비밀번호가 일치하지 않습니다." });
         return;
       }
+      loginAttempts.delete(ip);
       const token = createSession();
-      json(res, 200, settingsPayload(state, true), { "Set-Cookie": setSessionCookie(token) });
+      json(res, 200, settingsPayload(state, true), { "Set-Cookie": setSessionCookie(token, req) });
       return;
     }
 
     if (req.method === "POST" && url.pathname === "/api/settings/password/change") {
+      const ip = req.socket.remoteAddress;
+      if (isLoginLocked(ip)) {
+        json(res, 429, { error: "로그인 시도가 너무 많습니다. 1분 후 다시 시도하세요." }, { "Retry-After": "60" });
+        return;
+      }
       const { currentPassword, newPassword } = await readBody(req);
       if (!authenticated || !verifyPassword(String(currentPassword || ""), state.password)) {
+        recordLoginFailure(ip);
         json(res, 401, { error: "현재 비밀번호가 일치하지 않습니다." });
         return;
       }
-      if (String(newPassword || "").length < 4) {
-        json(res, 400, { error: "새 비밀번호는 4자 이상이어야 합니다." });
+      loginAttempts.delete(ip);
+      if (String(newPassword || "").length < 8) {
+        json(res, 400, { error: "새 비밀번호는 8자 이상이어야 합니다." });
         return;
       }
       const now = new Date().toISOString();
@@ -388,8 +422,9 @@ function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const pathname = decodeURIComponent(url.pathname);
   const requestedPath = pathname === "/" ? "/index.html" : pathname;
-  const allowedFiles = new Set(["/index.html", "/styles.css", "/app.js"]);
-  if (!allowedFiles.has(requestedPath)) {
+  const allowedFiles = new Set(["/index.html", "/styles.css", "/app.js", "/config/site.config.js"]);
+  const vendorFile = /^\/vendor\/[A-Za-z0-9._-]+\.js$/.test(requestedPath) && !requestedPath.includes("..");
+  if (!allowedFiles.has(requestedPath) && !vendorFile) {
     req.url = "/index.html";
     serveStatic(req, res);
     return;
@@ -412,7 +447,7 @@ function serveStatic(req, res) {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "SAMEORIGIN",
     "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Cache-Control": ext === ".js" || ext === ".css" ? "public, max-age=3600" : "no-cache",
+    "Cache-Control": (ext === ".js" || ext === ".css") && !requestedPath.startsWith("/config/") ? "public, max-age=3600" : "no-cache",
   });
   fs.createReadStream(finalPath).pipe(res);
 }
@@ -424,6 +459,16 @@ const server = http.createServer((req, res) => {
   }
   serveStatic(req, res);
 });
+
+// ADMIN_PASSWORD 설정 시 첫 기동에 관리자 비밀번호를 선점 방지용으로 미리 저장
+const bootState = readState();
+if (process.env.ADMIN_PASSWORD && !bootState.password) {
+  const state = bootState;
+  const now = new Date().toISOString();
+  state.password = { ...hashPassword(process.env.ADMIN_PASSWORD), createdAt: now, updatedAt: now };
+  state.passwordHistory = [{ type: "created", at: now }, ...state.passwordHistory].slice(0, 20);
+  writeState(state);
+}
 
 server.listen(port, () => {
   fs.mkdirSync(dataDir, { recursive: true });
