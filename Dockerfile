@@ -7,6 +7,8 @@ ENV PORT=8080
 ENV DATA_DIR=/app/data
 
 COPY index.html styles.css app.js server.js ./
+COPY config ./config
+COPY vendor ./vendor
 
 VOLUME ["/app/data"]
 

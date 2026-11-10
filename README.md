@@ -1,276 +1,149 @@
-# Ops Portfolio Hub
+# Ops Hub
 
-IT 운영 업무를 한 화면에서 시연하고 실행하기 위한 웹 포털입니다. 대시보드, 공식 운영 메뉴, 개인/업무 유틸리티, 설정 화면을 Vanilla JavaScript 기반 SPA 형태로 제공하고, Settings 값은 서버 저장소에 유지합니다.
+IT 운영 업무를 한 화면에서 실행하는 웹 포털입니다. 대시보드, 공식 IT 메뉴, 개발자/유틸리티 도구, 설정 화면을 Vanilla JavaScript SPA로 제공하고, Settings 값은 Node.js 서버의 데이터 볼륨에 저장합니다. 빌드 도구와 npm 의존성 없이 `node`만으로 실행합니다.
 
-현재 사이트는 포트폴리오용으로 동작 가능한 도구를 우선 배치하고, 설정 화면에서 메뉴와 대시보드 값을 관리할 수 있는 구조입니다.
+데모: https://ops-site.flgram.com/
 
-데모 사이트: https://ops-site.flgram.com/
+## Quick Start
 
-## 주요 기능
+Docker와 Docker Compose가 설치된 환경에서 실행합니다.
 
-- 좌측 사이드바 기반 포털 네비게이션과 접기/펼치기
-- 날씨, 공지 채널, 점심 메뉴, 회의실 현황을 보여주는 대시보드
-- 하단 `Ops Portfolio` 톱니바퀴 버튼으로 진입하는 Settings
-- Settings에서 메뉴 표시 여부, 대시보드 값, 연동 정보를 관리하는 서버 저장 설정
-- Microsoft Entra ID Client Credentials와 Microsoft Graph 사용자/그룹 수 동기화
-- 최초 Settings 진입 비밀번호 생성, 이후 비밀번호 검증과 변경
-- Slack, Google Workspace, Microsoft Entra ID 연동 정보 관리 화면
-- Lucide 아이콘과 반응형 레이아웃
-- Docker + Node.js 기반 사이트/API 배포
-- GitHub Actions 기반 서버 자동 배포
-
-## 구현 완료 도구
-
-| 도구 | 구분 | 설명 |
-| --- | --- | --- |
-| Policy Navigator | Official | 사내 IT 정책 항목과 요청 흐름을 탐색하는 메뉴 |
-| System Directory | Official | Slack, Google Workspace, Microsoft Entra ID 연동 현황 관리 |
-| Signature Creator | Official | 공식 이메일 서명 생성 |
-| IT Onboarding Guide | Official | 신규 입사자 IT 환경 셋업 체크리스트 |
-| Text Cleaner | Labs | 공백, 줄바꿈, 특수문자 정리 |
-| Image Studio | Labs | 이미지 리사이즈, 크롭, 포맷 변환 |
-| Secure PDF | Labs | PDF 보관 암호화, 복호화, 병합, 페이지 추출 |
-| Network Check | Labs | 다운로드, 업로드, 레이턴시 측정 |
-| Diff Expert | Labs | 텍스트 차이 비교와 변경 요약 |
-| JSON Formatter | Labs | JSON 검증, 포맷, 압축, key 정렬 |
-| Base64 Codec | Labs | Unicode 텍스트 Base64 인코딩/디코딩 |
-| UUID Generator | Labs | UUID v4 단일/일괄 생성 |
-| URL Codec | Labs | URL/URI 컴포넌트 인코딩, 디코딩, 쿼리 파싱 |
-| JWT Decoder | Labs | JWT header/payload 로컬 디코딩 |
-| Hash Generator | Labs | SHA 해시 생성과 기대값 비교 |
-| Regex Tester | Labs | 정규식 패턴, 플래그, 매칭 위치와 캡처 그룹 테스트 |
-| Timestamp Converter | Labs | Unix timestamp와 현지 날짜/시간 변환 |
-| Cron Parser | Labs | 5-field cron 검증과 다음 실행 시각 계산 |
-| Password Generator | Labs | Web Crypto 기반 랜덤 비밀번호 생성과 강도 확인 |
-| Color Converter | Labs | HEX, RGB, HSL 색상 값 변환과 미리보기 |
-| Subnet Calculator | Labs | IPv4 CIDR 네트워크와 호스트 범위 계산 |
-
-## Tech Stack
-
-- HTML
-- CSS
-- Vanilla JavaScript
-- LocalStorage
-- Node.js built-in HTTP server
-- Docker volume based settings store
-- Lucide icons via CDN
-- Google Fonts via CDN
-- pdf-lib via CDN
-- Docker Compose on Linux server
-- GitHub Actions for CI/CD
-
-빌드 도구 없이 운영합니다. 저장 후 브라우저 새로고침으로 확인하고, JavaScript 문법은 `node --check app.js`와 `node --check server.js`로 검증합니다.
-
-## Implementation Note
-
-이 프로젝트의 구현 작업은 Codex를 이용한 바이브 코딩 방식으로 진행했습니다.
-
-## Project Structure
-
-```text
-.
-├── index.html                   # 앱 shell과 기본 DOM 구조
-├── styles.css                   # 전체 레이아웃, 반응형, 도구 UI 스타일
-├── app.js                       # 라우팅, 메뉴 데이터, 화면 렌더링, 도구 로직
-├── server.js                    # 정적 파일 serving과 Settings 저장 API
-├── Dockerfile                   # Node.js 앱 컨테이너 이미지
-├── nginx.conf                   # 이전 Nginx serving 설정 참고 파일
-├── compose.prod.yml             # 서버 배포용 Docker Compose
-├── .github/workflows/deploy.yml # GitHub Actions 배포 파이프라인
-├── AGENTS.md                    # Codex/gstack 작업 지침
-└── skills-lock.json             # gstack skill lock 파일
+```bash
+git clone https://github.com/redplug/ops-site.git
+cd ops-site
+cp .env.example .env        # ADMIN_PASSWORD 값을 8자 이상으로 설정
+docker compose up -d
 ```
 
-## App Model
+브라우저에서 `http://localhost:8080`을 엽니다. 포트를 바꾸려면 `.env`의 `APP_PORT`를 수정합니다.
 
-`index.html`은 고정 shell을 제공합니다. 실제 화면 전환과 도구 렌더링은 `app.js`가 담당합니다.
-
-`app.js`의 주요 역할:
-
-- official/lab/policy 메뉴 데이터 정의
-- sidebar route 처리
-- 홈 대시보드 렌더링
-- Settings 화면과 서버 설정 저장 API 연동
-- 도구별 화면 렌더링
-- 브라우저 단독 실행 도구 로직 처리
-
-서버가 필요 없는 도구는 브라우저에서 바로 동작합니다. Settings 비밀번호, 메뉴 표시 여부, 대시보드 값, 연동 설정, 동기화 결과는 서버의 Docker volume에 저장됩니다.
-
-## Settings
-
-Settings는 사이드바 하단 `Ops Portfolio` 영역의 톱니바퀴 버튼에서 엽니다.
-
-첫 진입 시에는 `Initial Settings Password` 화면에서 서버 비밀번호를 설정합니다. 이후 Settings 계열 화면에 진입할 때는 서버 저장 비밀번호 검증을 통과해야 합니다.
-
-Settings에서 제공하는 관리 화면:
-
-- `Show Menu`: 사이드바에 표시할 메뉴를 선택합니다.
-- `Integration Settings`: Slack, Google Workspace 표시값과 Microsoft Entra ID Graph 동기화를 관리합니다.
-- `Security Settings`: Settings 진입 비밀번호를 변경하거나 다시 잠급니다.
-
-비밀번호 원문은 저장하지 않습니다. 서버는 PBKDF2-SHA-256 해시와 salt만 Docker volume에 저장하고, 브라우저에는 HttpOnly 세션 쿠키만 내려줍니다. Entra client secret은 서버 저장소에만 보관하고 API 응답과 브라우저 저장소에는 노출하지 않습니다.
-
-### Microsoft Entra ID Client Credentials
-
-Entra ID 연동은 서버의 Client Credentials 흐름을 사용합니다. Azure Portal의 App registration에서 client secret을 만들고 Microsoft Graph Application permissions에 관리자 동의를 부여해야 합니다.
-
-필수 설정:
-
-- Application client ID
-- Tenant ID
-- Client secret
-- Graph scopes: 기본값은 `https://graph.microsoft.com/.default`
-
-`Directory.Read.All`, `Application.Read.All`, `Device.Read.All` Application permissions는 사용자/그룹/애플리케이션/디바이스 수 조회에 필요하며 tenant 관리자 동의가 필요합니다. access token은 서버 메모리에서만 사용하고 저장하지 않으며, 동기화 결과는 서버 저장소에 기록합니다.
-
-## Local Development
-
-로컬 미리보기:
+Docker 없이 실행하려면 Node.js 20 이상에서:
 
 ```bash
 PORT=4173 DATA_DIR=.local-data node server.js
 ```
 
-브라우저에서 접속:
+`http://127.0.0.1:4173`을 엽니다. 테스트는 `node --test`로 실행합니다.
 
-```text
-http://127.0.0.1:4173/
-```
+환경 변수:
 
-JavaScript 문법 확인:
+| 변수 | 기본값 | 설명 |
+| --- | --- | --- |
+| `APP_PORT` | `8080` | Docker에서 호스트에 여는 포트 (`.env`) |
+| `ADMIN_PASSWORD` | 없음 | 설정 시 서버 기동 때 관리자 비밀번호로 저장. 8자 이상 |
+| `COOKIE_SECURE` | 없음 | `true`면 세션 쿠키에 항상 `Secure` 부착 |
+| `PORT` | `8080` | 서버가 listen하는 포트 (Docker 이미지 안에서는 8080 고정) |
+| `DATA_DIR` | `./data` | Settings 저장 파일(`settings.json`) 위치. Docker에서는 `/app/data` (볼륨) |
 
-```bash
-node --check app.js
-```
+## 내 조직용으로 바꾸기
 
-Docker 이미지 확인:
+대부분의 조직 고유 내용은 `config/site.config.js` 한 파일에 있습니다. 수정 후 브라우저를 새로고침하면 반영됩니다. 이 파일을 지워도 앱은 기본값으로 실행됩니다.
 
-```bash
-docker compose -f compose.prod.yml up -d --build
-```
-
-## Development Workflow
-
-기능 작업은 브랜치에서 진행합니다.
-
-```bash
-git checkout main
-git pull
-git checkout -b feature/tool-name
-```
-
-작업 후 기본 확인:
-
-```bash
-node --check app.js
-git status
-```
-
-커밋 prefix:
-
-- `feat:` 새 기능
-- `fix:` 버그 수정
-- `docs:` 문서 수정
-- `style:` CSS/UI 조정
-- `refactor:` 동작 변화 없는 구조 개선
-- `chore:` 설정, 배포, 기타 작업
-
-## Adding A New Tool
-
-새 도구를 추가할 때는 보통 다음 영역을 수정합니다.
-
-1. `app.js`의 `officialTools` 또는 `labTools`에 메뉴 항목 추가
-2. `readyToolKeys`에 실제 노출할 route key 추가
-3. 도구 전용 `renderXxx()` 함수 작성
-4. `openRoute()`에 route 분기 추가
-5. 필요한 스타일을 `styles.css`에 추가
-6. `node --check app.js` 실행
-
-구현 기준:
-
-- 첫 화면에 긴 사용 설명을 넣지 않습니다.
-- 포트폴리오에서 바로 시연 가능한 입력/출력 상태를 둡니다.
-- 모바일에서 텍스트와 버튼이 깨지지 않아야 합니다.
-- 서버가 필요 없는 기능은 브라우저 단독 구현을 우선합니다.
-
-## Deployment
-
-배포 흐름:
-
-```text
-GitHub private repo
--> GitHub Actions
--> SSH upload to Linux server
--> docker compose build/up
--> Node.js container serves static files and Settings API
-```
-
-Production compose:
-
-```bash
-docker compose -f compose.prod.yml up -d --build --remove-orphans
-```
-
-컨테이너 이름:
-
-```text
-ops-site
-```
-
-기본 포트:
-
-```text
-8080
-```
-
-접속 형태:
-
-```text
-https://ops-site.flgram.com/
-```
-
-## GitHub Actions Configuration
-
-Workflow:
-
-```text
-.github/workflows/deploy.yml
-```
-
-필요한 GitHub Actions secrets:
-
-| Secret | Description |
+| 섹션 | 바꿀 수 있는 내용 |
 | --- | --- |
-| `SSH_HOST` | Linux 서버 IP 또는 호스트명 |
-| `SSH_USER` | 배포용 SSH 사용자 |
-| `SSH_PORT` | SSH 포트 |
-| `SSH_PRIVATE_KEY` | 서버 접속용 private key 전체 내용 |
-| `DEPLOY_PATH` | 서버 내 배포 경로, 예: `/opt/ops-site` |
+| `brand` | 사이드바 제목(`name`), 설명(`tagline`), 로고 아이콘(`mark`), 하단 문구, 버전 표시, 이메일 서명 로고 글자와 문구 |
+| `dashboard` | 채널 카드 문구, 날씨 지역 이름과 좌표, 공지 제목/본문(`notice`), 퀵링크 목록(`quickLinks`) |
+| `signature` | 이메일 서명 생성기의 기본 이름, 이메일, 부서 |
+| `directory` | 시스템 디렉터리(Microsoft Entra ID, Google Workspace, Slack)의 기본 연동 정보 |
+| `onboarding` | 신규 입사자 셋업 단계(`phases`)와 권한 매트릭스(`accessRows`) |
+| `policies` | Policy Navigator 아래 정책 목록. 각 항목의 `title`, `desc`, `icon`, `summary`, `steps`, `links`, `contact` |
 
-필요한 GitHub Actions variable:
+`policies`의 `key`는 바꾸지 마세요. 딥링크 주소(`#policy-…`)로 쓰입니다. 현재 정책 본문은 샘플입니다.
 
-| Variable | Description |
-| --- | --- |
-| `APP_PORT` | 컨테이너를 외부에 노출할 포트, 기본 `8080` |
+## 보안 주의
 
-서버에서 직접 확인:
+- **`ADMIN_PASSWORD`를 설정하세요.** 설정하지 않으면 처음 Settings에 접속한 사람이 관리자 비밀번호를 정합니다. 설정하면 서버 기동 시 미리 저장되어 선점할 수 없습니다. 최소 8자입니다.
+- **HTTPS 리버스 프록시 뒤에서 운영하는 것을 권장합니다.** 프록시가 `X-Forwarded-Proto: https` 헤더를 보내면 세션 쿠키에 `Secure`가 자동으로 붙습니다. 프록시 없이 http 내부망에서 쓸 때는 `COOKIE_SECURE`를 비워 두세요. `COOKIE_SECURE=true`로 두면 항상 `Secure`가 붙어 http에서는 브라우저가 쿠키를 저장하지 않습니다.
+- 비밀번호 검증 실패가 IP 기준 5회 누적되면 60초 동안 로그인 시도를 막습니다. 프록시 뒤에서는 모든 사용자가 같은 IP로 보이므로 한 사람의 실패가 다른 사람을 막을 수 있습니다.
+- 로그인 세션은 서버 메모리에 있습니다(유효 12시간). 서버나 컨테이너를 재시작하면 모든 사용자가 다시 로그인해야 합니다.
+- 비밀번호 원문은 저장하지 않습니다(PBKDF2-SHA-256 해시). Entra client secret은 서버 저장소에만 있고 브라우저나 API 응답으로 내보내지 않습니다.
+- 도구(JWT 디코더, Hash, PDF, 이미지 등)는 입력값을 브라우저 안에서만 처리합니다. 네트워크 도구(Network Check)는 아래 외부 서비스로 요청을 보냅니다.
+
+## 외부 통신 목록
+
+| 대상 | 언제 | 보내는 것 |
+| --- | --- | --- |
+| `api.open-meteo.com`, `geocoding-api.open-meteo.com` | 대시보드 날씨 카드 | 설정된 좌표/지역 검색어 |
+| `photon.komoot.io` | 날씨 지역 검색 | 입력한 지역 이름 |
+| `speed.cloudflare.com` | Network Check 실행 시 | 속도 측정 요청 |
+| `login.microsoftonline.com`, `graph.microsoft.com` | Settings > Integration에서 Entra 동기화 실행 시 (서버가 호출) | Client Credentials 토큰 요청, 사용자/그룹 수 조회 |
+
+Lucide 아이콘, pdf-lib, 폰트는 외부 CDN이 아니라 `vendor/`와 시스템 폰트를 사용하므로 폐쇄망에서도 동작합니다.
+
+## 도구 목록
+
+Official 메뉴와 Labs 도구는 `app.js`의 `officialTools`, `labTools` 배열에서 정의합니다.
+
+| 도구 | 구분 | key | 설명 |
+| --- | --- | --- | --- |
+| Policy Navigator | Official | `policy` | 정책 목록과 항목별 절차 |
+| Signature Creator | Official | `signature` | 공식 이메일 서명 생성 |
+| System Directory | Official | `directory` | Slack, Google Workspace, Entra ID 연동 현황과 바로가기 |
+| IT Onboarding Guide | Official | `onboarding` | 신규 입사자 IT 환경 셋업 체크리스트 |
+| Text Cleaner | Labs | `textcleaner` | 공백, 줄바꿈, 특수문자 정리 |
+| Network Check | Labs | `netcheck` | 다운로드, 업로드, 레이턴시 측정 |
+| Image Studio | Labs | `imagestudio` | 리사이즈, 크롭, 포맷 변환 |
+| Secure PDF | Labs | `pdf` | PDF 암호화, 복호화, 병합, 페이지 추출 |
+| Diff Expert | Labs | `diff` | 텍스트 차이 비교 |
+| JSON Formatter | Labs | `json` | JSON 검증, 정렬, 압축 |
+| Base64 Codec | Labs | `base64` | Base64와 URL-safe Base64 인코딩/디코딩 |
+| UUID Generator | Labs | `uuid` | UUID v4 단일/일괄 생성 |
+| URL Codec | Labs | `urlcodec` | URL, 쿼리 문자열 인코딩/디코딩 |
+| JWT Decoder | Labs | `jwt` | JWT header/payload 디코딩 (서명 검증 안 함) |
+| Hash Generator | Labs | `hash` | SHA 해시 생성과 비교 |
+| Regex Tester | Labs | `regex` | 정규식 실시간 테스트 |
+| Timestamp Converter | Labs | `timestamp` | Unix timestamp와 날짜/시간 변환 |
+| Cron Parser | Labs | `cron` | 5-field cron 해석과 다음 실행 시각 |
+| Password Generator | Labs | `password` | 암호학적 랜덤 비밀번호 생성 |
+| Color Converter | Labs | `color` | HEX, RGB, HSL 변환 |
+| Subnet Calculator | Labs | `subnet` | IPv4 CIDR 계산 |
+
+## 새 도구 추가법
+
+1. `app.js`의 `officialTools` 또는 `labTools` 배열에 항목을 추가합니다. `key`, `cat`, `name`, `desc`, `status`, `icon`(Lucide 아이콘 이름)을 적습니다. 사이드바에 자동으로 나타나고 Settings > Show Menu에서 켜고 끌 수 있습니다.
+2. 같은 파일에 `renderXxx()` 함수를 작성합니다. 기존 도구(예: `renderSubnetCalculator`)의 구조를 따르면 됩니다.
+3. `app.js` 하단의 `routes` 맵에 `key: renderXxx`를 등록합니다.
+4. 필요한 스타일은 `styles.css`에 추가합니다.
+5. `node --check app.js`와 `node --test`로 확인합니다.
+
+## 배포
+
+`.github/workflows/deploy.yml`은 `main` 브랜치 push마다 SSH로 서버에 올리고 `docker compose -f compose.yml up -d --build`를 실행합니다. 이 워크플로는 `redplug/ops-site` 저장소에서만 실행되도록 `if: github.repository == 'redplug/ops-site'` 조건이 걸려 있습니다. 포크해서 쓸 때는 다음을 설정하세요.
+
+- 워크플로의 `if:` 줄을 자신의 저장소 이름으로 바꾸거나 제거합니다.
+- GitHub Actions에 `production` environment를 만들고 아래 secret과 variable을 등록합니다.
+
+| 이름 | 종류 | 설명 |
+| --- | --- | --- |
+| `SSH_HOST` | secret | 서버 IP 또는 호스트명 |
+| `SSH_USER` | secret | 배포용 SSH 사용자 |
+| `SSH_PORT` | secret | SSH 포트 (기본 22) |
+| `SSH_PRIVATE_KEY` | secret | 서버 접속용 private key 전체 내용 |
+| `DEPLOY_PATH` | secret | 서버 배포 경로 (기본 `/opt/ops-site`) |
+| `APP_PORT` | variable | 외부 노출 포트 (기본 8080) |
+
+서버에는 Docker와 Docker Compose plugin이 필요합니다. 컨테이너 이름은 `ops-site`, 데이터는 `ops-site-data` 볼륨에 저장됩니다. 서버에서 직접 확인하려면:
 
 ```bash
 docker ps --filter name=ops-site
 curl -I http://127.0.0.1:8080/
 ```
 
-## Server Notes
+`main`에 push하면 `ci.yml`이 문법 검사와 `node --test`를 실행합니다.
 
-서버에는 Docker와 Docker Compose plugin이 필요합니다.
+## License
 
-Ubuntu 기준:
+MIT License. 자세한 내용은 [LICENSE](LICENSE)를 참고하세요.
 
-```bash
-sudo apt-get update
-sudo apt-get install -y docker.io docker-compose-plugin
-sudo usermod -aG docker $USER
-mkdir -p /opt/ops-site
-```
+## Microsoft Entra ID Client Credentials
 
-`usermod` 이후에는 재로그인이 필요합니다.
+System Directory의 Entra ID 연동은 서버의 Client Credentials 흐름을 사용합니다. Azure Portal의 App registration에서 client secret을 만들고 Microsoft Graph Application permissions에 관리자 동의를 부여해야 합니다.
+
+필수 설정:
+
+- Application (client) ID
+- Tenant ID
+- Client secret
+- Graph scopes: 기본값 `https://graph.microsoft.com/.default`
+
+`Directory.Read.All`, `Application.Read.All`, `Device.Read.All` Application permissions는 사용자/그룹/애플리케이션/디바이스 수 조회에 필요하며 tenant 관리자 동의가 필요합니다. access token은 서버 메모리에서만 사용하고 저장하지 않으며, 동기화 결과만 서버 저장소에 기록합니다.

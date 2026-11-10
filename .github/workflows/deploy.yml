@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.repository == 'redplug/ops-site'
     runs-on: ubuntu-latest
     environment: production
 
@@ -19,14 +20,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Validate static assets
         run: |
           test -f index.html
           test -f styles.css
           test -f app.js
           test -f server.js
+          test -f config/site.config.js
+          test -f vendor/lucide.min.js
+          test -f vendor/pdf-lib.min.js
           node --check app.js
           node --check server.js
+          node --check config/site.config.js
+          node --test
 
       - name: Pack release
         run: |
@@ -37,7 +48,7 @@ jobs:
             --exclude='.gstack-codex-txn' \
             --exclude='node_modules' \
             -czf ops-site-release.tgz \
-            index.html styles.css app.js server.js Dockerfile nginx.conf compose.prod.yml
+            index.html styles.css app.js server.js Dockerfile compose.yml config vendor
 
       - name: Configure SSH
         env:
@@ -78,7 +89,7 @@ jobs:
             set -e
             cd '$TARGET_PATH'
             tar -xzf ops-site-release.tgz
-            if APP_PORT='$REMOTE_APP_PORT' docker compose -f compose.prod.yml up -d --build --remove-orphans; then
+            if APP_PORT='$REMOTE_APP_PORT' docker compose -f compose.yml up -d --build --remove-orphans; then
               docker image prune -f
             else
               echo 'Docker rebuild failed; updating existing ops-site container files and restarting.'
@@ -87,6 +98,9 @@ jobs:
               docker cp styles.css ops-site:/app/styles.css
               docker cp app.js ops-site:/app/app.js
               docker cp server.js ops-site:/app/server.js
+              docker exec ops-site mkdir -p /app/config /app/vendor
+              docker cp config/. ops-site:/app/config/
+              docker cp vendor/. ops-site:/app/vendor/
               docker restart ops-site
             fi
           "

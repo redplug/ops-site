@@ -6,6 +6,9 @@ services:
     image: ops-site:latest
     container_name: ops-site
     restart: unless-stopped
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
     ports:
       - "${APP_PORT:-8080}:8080"
     volumes:
